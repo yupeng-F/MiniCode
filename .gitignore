@@ -13,4 +13,12 @@ __pycache__/
 eval/results/
 
 .claude/
+sigma/
+学习文档/
+.reasonix/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
 data/
