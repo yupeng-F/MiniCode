@@ -1,0 +1,50 @@
+# Multi Agents
+
+基于 `LangGraph + Harness` 的多智能体 Coding Assistant 项目骨架。
+
+## 项目目标
+
+- 服务求职与面试表达，形成一个可展示的高质量 Agent 项目
+- 系统熟悉多 Agent、LangGraph、Harness、安全与记忆管理设计
+- 解决真实开发过程中的痛点，如代码理解、改 bug、审查、测试与安全执行
+
+## 当前阶段
+
+- 明确系统架构与模块边界
+- 收敛文档体系
+- 搭建项目目录与最小代码骨架
+- 为后续接入 LangGraph、模型、工具执行与审批机制预留扩展点
+
+## 文档入口
+
+- [AGENTS.md](D:\Code\Python\Multi_Agents\AGENTS.md)
+- [文档导航](D:\Code\Python\Multi_Agents\docs\00_文档导航.md)
+- [项目目标与实施路线](D:\Code\Python\Multi_Agents\docs\01_项目目标与实施路线.md)
+- [系统架构与模块设计](D:\Code\Python\Multi_Agents\docs\02_系统架构与模块设计.md)
+- [智能体协作、状态流转与权限设计](D:\Code\Python\Multi_Agents\docs\03_智能体协作_状态流转与权限设计.md)
+- [运行时与记忆系统设计](D:\Code\Python\Multi_Agents\docs\04_运行时与记忆系统设计.md)
+- [项目结构与开发计划](D:\Code\Python\Multi_Agents\docs\05_项目结构与开发计划.md)
+- [核心数据结构设计](D:\Code\Python\Multi_Agents\docs\06_核心数据结构设计.md)
+
+## 目录概览
+
+```text
+src/multi_agents/
+  agents/
+  interfaces/
+  memory/
+  observability/
+  orchestrator/
+  runtime/
+  schemas/
+  tools/
+tests/
+docs/
+```
+
+## 下一步建议
+
+1. 补齐 `LangGraph StateGraph` 的真实实现
+2. 接入模型层与 prompt 模板
+3. 实现 `ToolRegistry + Harness Runtime + Approval Gate`
+4. 增加 checkpoint、artifact store 和审计日志

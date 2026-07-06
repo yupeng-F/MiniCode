@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全景对比：MCP vs GPTs vs 其他</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 40px 20px; }
+  .container { max-width: 1000px; margin: 0 auto; }
+
+  h1 { font-size: 28px; margin-bottom: 4px; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { color: #94a3b8; margin-bottom: 32px; font-size: 14px; }
+
+  .core-div { text-align: center; padding: 20px; background: #1e293b; border-radius: 16px; margin-bottom: 32px; border: 1px solid #334155; }
+  .core-div .big { font-size: 42px; font-weight: 800; letter-spacing: 2px; line-height: 1.4; }
+  .core-div .big .mcp-c { color: #a78bfa; }
+  .core-div .big .gpts-c { color: #34d399; }
+  .core-div .big .divider { color: #475569; }
+
+  .table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+  .table th, .table td { padding: 14px 18px; text-align: left; border-bottom: 1px solid #1e293b; font-size: 14px; }
+  .table th { background: #1e293b; font-weight: 600; color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .table td:first-child { font-weight: 600; color: #e2e8f0; }
+  .table tr:hover td { background: #1e293b; }
+  .tag-mcp { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #3b1f6e; color: #a78bfa; }
+  .tag-gpts { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #064e3b; color: #34d399; }
+  .tag-both { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #1e3a5f; color: #60a5fa; }
+
+  .ecosystem { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+  .eco-card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 20px; }
+  .eco-card.highlight { border-color: #a78bfa; }
+  .eco-icon { font-size: 28px; margin-bottom: 8px; }
+  .eco-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .eco-sub { font-size: 12px; color: #64748b; margin-bottom: 12px; line-height: 1.5; }
+  .eco-examples { font-size: 12px; color: #94a3b8; }
+  .eco-examples span { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; background: #0f172a; border-radius: 6px; border: 1px solid #334155; }
+
+  .flow { padding: 24px; background: #1e293b; border-radius: 16px; margin-bottom: 32px; border: 1px solid #334155; }
+  .flow-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: #e2e8f0; }
+  .flow-steps { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .flow-box { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px 20px; text-align: center; }
+  .flow-box .label { font-size: 12px; color: #94a3b8; }
+  .flow-box .val { font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .flow-arrow { color: #475569; font-size: 20px; }
+
+  .takeaway { background: linear-gradient(135deg, #1e3a5f, #3b1f6e); border: 1px solid #3b82f6; border-radius: 16px; padding: 24px; }
+  .takeaway h3 { font-size: 18px; margin-bottom: 12px; color: #60a5fa; }
+  .takeaway p { font-size: 14px; color: #cbd5e1; line-height: 1.8; }
+  .takeaway strong { color: #a78bfa; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Agent 全景图</h1>
+  <p class="subtitle">MCP · GPTs · 以及它们在 Agent 生态中的位置</p>
+
+  <!-- 一句话核心 -->
+  <div class="core-div">
+    <div class="big">
+      <span class="mcp-c">MCP</span><span class="divider"> = </span><span style="color:#fbbf24;">标准</span>
+      <span style="color:#475569;"> &nbsp;|&nbsp; </span>
+      <span class="gpts-c">GPTs</span><span class="divider"> = </span><span style="color:#fbbf24;">产品</span>
+    </div>
+    <div style="color:#64748b; margin-top: 8px; font-size: 14px;">
+      MCP 定义"怎么连" · GPTs 解决"怎么用"
+    </div>
+  </div>
+
+  <!-- 完整对比表 -->
+  <table class="table">
+    <tr>
+      <th style="width:20%">维度</th>
+      <th style="width:40%"><span class="tag-mcp">MCP</span></th>
+      <th style="width:40%"><span class="tag-gpts">GPTs</span></th>
+    </tr>
+    <tr>
+      <td>本质</td>
+      <td>模型与工具之间的通信协议</td>
+      <td>可定制的 AI 助手（产品）</td>
+    </tr>
+    <tr>
+      <td>提出者</td>
+      <td>Anthropic</td>
+      <td>OpenAI</td>
+    </tr>
+    <tr>
+      <td>开放性</td>
+      <td>开放标准，任何人可实现</td>
+      <td>闭源，仅限 OpenAI 生态</td>
+    </tr>
+    <tr>
+      <td>支持模型</td>
+      <td>任意模型（Claude / GPT / Gemini / 开源）</td>
+      <td>仅限 OpenAI 模型</td>
+    </tr>
+    <tr>
+      <td>用户画像</td>
+      <td>开发者</td>
+      <td>普通用户 ~ 开发者</td>
+    </tr>
+    <tr>
+      <td>可编程性</td>
+      <td>协议层，完全灵活</td>
+      <td>配置化，有限定制</td>
+    </tr>
+    <tr>
+      <td>部署方式</td>
+      <td>本地 / 远程 均可</td>
+      <td>仅 OpenAI 云端</td>
+    </tr>
+    <tr>
+      <td>定位</td>
+      <td>基础设施（协议层）</td>
+      <td>应用产品（应用层）</td>
+    </tr>
+  </table>
+
+  <!-- 生态位置 -->
+  <div class="flow">
+    <div class="flow-title">🔗 它们在 Agent 生态中的位置</div>
+    <div class="flow-steps">
+      <div class="flow-box">
+        <div class="label">用户层</div>
+        <div class="val" style="color:#34d399;">GPTs</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">
+        <div class="label">模型层</div>
+        <div class="val" style="color:#60a5fa;">GPT-4o</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color:#a78bfa;">
+        <div class="label">标准层</div>
+        <div class="val" style="color:#a78bfa;"><strong>MCP</strong></div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">
+        <div class="label">工具层</div>
+        <div class="val" style="color:#fbbf24;">API / 数据库 / 文件</div>
+      </div>
+    </div>
+    <p style="text-align:center; color:#64748b; font-size:12px; margin-top:16px;">
+      GPTs (产品) → 调用 GPT-4o (模型) → 通过 MCP (标准) → 连接各类工具
+    </p>
+  </div>
+
+  <!-- 生态全景 -->
+  <div class="flow-title" style="margin-bottom: 16px;">🌍 Agent 生态全景</div>
+  <div class="ecosystem">
+    <div class="eco-card highlight">
+      <div class="eco-icon">🔌</div>
+      <div class="eco-title" style="color:#a78bfa;">MCP</div>
+      <div class="eco-sub">工具连接标准<br>Model Context Protocol</div>
+      <div class="eco-examples">
+        <span>Claude Desktop</span> <span>VS Code</span> <span>Dify</span> <span>自定义 Agent</span>
+      </div>
+    </div>
+    <div class="eco-card">
+      <div class="eco-icon">🏗️</div>
+      <div class="eco-title" style="color:#34d399;">GPTs</div>
+      <div class="eco-sub">OpenAI 的产品化 Agent<br>无需代码，拖拽创建</div>
+      <div class="eco-examples">
+        <span>ChatGPT 内部</span> <span>GPT Store</span>
+      </div>
+    </div>
+    <div class="eco-card">
+      <div class="eco-icon">🧩</div>
+      <div class="eco-title" style="color:#fbbf24;">Skills / 插件</div>
+      <div class="eco-sub">平台特定的行为扩展<br>通常 = 提示词 + 工具配置</div>
+      <div class="eco-examples">
+        <span>Claude Code Skills</span> <span>ChatGPT Plugins</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ecosystem">
+    <div class="eco-card">
+      <div class="eco-icon">🐍</div>
+      <div class="eco-title" style="color:#f472b6;">Agent 框架</div>
+      <div class="eco-sub">构建 Agent 的开发框架</div>
+      <div class="eco-examples">
+        <span>LangChain</span> <span>AutoGen</span> <span>CrewAI</span> <span>Semantic Kernel</span>
+      </div>
+    </div>
+    <div class="eco-card">
+      <div class="eco-icon">🔧</div>
+      <div class="eco-title" style="color:#38bdf8;">低代码平台</div>
+      <div class="eco-sub">可视化构建 AI 工作流</div>
+      <div class="eco-examples">
+        <span>Dify</span> <span>Coze</span> <span>Flowise</span>
+      </div>
+    </div>
+    <div class="eco-card">
+      <div class="eco-icon">☁️</div>
+      <div class="eco-title" style="color:#fb923c;">托管服务</div>
+      <div class="eco-sub">云端的 Agent 即服务</div>
+      <div class="eco-examples">
+        <span>Anthropic Agent</span> <span>OpenAI Agent SDK</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 金句总结 -->
+  <div class="takeaway">
+    <h3>🎯 一句话总结</h3>
+    <p>
+      <strong>MCP</strong> 是 Agent 的 <strong>"USB-C 接口"</strong>——定义了工具怎么插、数据怎么流，是基础设施。<br>
+      <strong>GPTs</strong> 是 OpenAI 基于自身模型做的 <strong>"品牌手机"</strong>——开箱即用但只能在它的生态里转。<br><br>
+      二者不矛盾——实际上 <strong>GPTs 未来也可以通过 MCP 连接工具</strong>（如果 OpenAI 选择支持的话），因为 MCP 是个开放标准。<br><br>
+      <span style="color:#94a3b8;">就像 USB-C 是标准，你的手机是产品——标准越统一，产品越强大。</span>
+    </p>
+  </div>
+</div>
+</body>
+</html>

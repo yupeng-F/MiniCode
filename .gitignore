@@ -1,0 +1,16 @@
+# Environment variables (contains secrets)
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+# Test cache
+.pytest_cache/
+# IDE
+.vscode/
+.idea/
+eval/results/
+
+.claude/
+data/

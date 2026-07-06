@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP 架构拆解</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 40px 20px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 24px; margin-bottom: 8px; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { color: #94a3b8; margin-bottom: 32px; font-size: 14px; }
+
+  .architecture { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+
+  .layer { width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px; position: relative; }
+  .layer.host { border-color: #3b82f6; }
+  .layer.client { border-color: #10b981; }
+  .layer.server { border-color: #f59e0b; }
+  .layer.mcpp { border-color: #8b5cf6; }
+
+  .l-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .l-sub { font-size: 12px; color: #94a3b8; margin-bottom: 16px; }
+  .l-host .l-title { color: #60a5fa; }
+  .l-client .l-title { color: #34d399; }
+  .l-server .l-title { color: #fbbf24; }
+  .l-mcpp .l-title { color: #a78bfa; }
+
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 12px; vertical-align: middle; }
+  .tag.host-tag { background: #1e3a5f; color: #60a5fa; border: 1px solid #3b82f6; }
+  .tag.client-tag { background: #064e3b; color: #34d399; border: 1px solid #10b981; }
+  .tag.server-tag { background: #78350f; color: #fbbf24; border: 1px solid #f59e0b; }
+  .tag.mcp-tag { background: #3b1f6e; color: #a78bfa; border: 1px solid #8b5cf6; }
+
+  .box-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .box { background: #0f172a; border: 1px solid #1e293b; border-radius: 10px; padding: 14px; }
+  .box-icon { font-size: 20px; margin-bottom: 6px; }
+  .box-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #e2e8f0; }
+  .box-desc { font-size: 11px; color: #64748b; line-height: 1.5; }
+
+  .mcp-features { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .mcp-feat { background: #0f172a; border: 1px solid #1e293b; border-radius: 10px; padding: 14px; text-align: center; }
+  .mcp-icon { font-size: 24px; margin-bottom: 8px; }
+  .mcp-title { font-size: 13px; font-weight: 600; color: #a78bfa; }
+  .mcp-desc { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.5; }
+
+  .arrow { color: #475569; text-align: center; font-size: 24px; padding: 4px 0; }
+
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 24px; }
+  .side { background: #1e293b; border-radius: 12px; padding: 20px; }
+  .side h3 { font-size: 15px; margin-bottom: 12px; }
+  .side ul { list-style: none; }
+  .side li { font-size: 13px; padding: 6px 0; color: #cbd5e1; border-bottom: 1px solid #1e293b; }
+  .side li:last-child { border: none; }
+  .side li::before { margin-right: 8px; }
+  .side.left { border-top: 3px solid #64748b; }
+  .side.left h3 { color: #94a3b8; }
+  .side.left li::before { content: '✗'; color: #ef4444; }
+  .side.right { border-top: 3px solid #10b981; }
+  .side.right h3 { color: #34d399; }
+  .side.right li::before { content: '✓'; color: #10b981; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>MCP 架构拆解</h1>
+  <p class="subtitle">Model Context Protocol — AI 应用的"USB-C 接口"</p>
+
+  <div class="architecture">
+
+    <div class="layer host">
+      <div class="l-title">Host 主机 <span class="tag host-tag">用户侧</span></div>
+      <div class="l-sub">LLM 应用/IDE/Agent 框架 — 发起会话的载体</div>
+      <div class="box-grid">
+        <div class="box"><div class="box-icon">💬</div><div class="box-title">Claude Desktop</div><div class="box-desc">用户直接交互的界面</div></div>
+        <div class="box"><div class="box-icon">🖥️</div><div class="box-title">VS Code / IDE</div><div class="box-desc">编码助手集成环境</div></div>
+        <div class="box"><div class="box-icon">⚙️</div><div class="box-title">自定义 Agent</div><div class="box-desc">你自己的 Agent 框架</div></div>
+      </div>
+    </div>
+
+    <div class="arrow">⏬</div>
+
+    <div class="layer client">
+      <div class="l-title">MCP Client 客户端 <span class="tag client-tag">连接层</span></div>
+      <div class="l-sub">每个 Host 内置，负责与 MCP Server 建立 1:1 连接</div>
+      <div class="box-grid">
+        <div class="box"><div class="box-icon">🔗</div><div class="box-title">会话管理</div><div class="box-desc">建立/维持/关闭连接</div></div>
+        <div class="box"><div class="box-icon">📋</div><div class="box-title">能力协商</div><div class="box-desc">交换协议版本、支持的功能</div></div>
+        <div class="box"><div class="box-icon">🔐</div><div class="box-title">认证授权</div><div class="box-desc">OAuth / API Key 等</div></div>
+      </div>
+    </div>
+
+    <div class="arrow">⏬⏬ (1 Client ↔ 1 Server)</div>
+
+    <div class="layer server">
+      <div class="l-title">MCP Server 服务端 <span class="tag server-tag">工具侧</span></div>
+      <div class="l-sub">暴露特定功能的轻量级服务</div>
+      <div class="box-grid">
+        <div class="box"><div class="box-icon">📂</div><div class="box-title">文件系统</div><div class="box-desc">读/写/搜索文件</div></div>
+        <div class="box"><div class="box-icon">🗄️</div><div class="box-title">数据库</div><div class="box-desc">SQL 查询、Schema 浏览</div></div>
+        <div class="box"><div class="box-icon">🌐</div><div class="box-title">Web API</div><div class="box-desc">GitHub / Slack / 内部系统</div></div>
+        <div class="box"><div class="box-icon">🔍</div><div class="box-title">搜索引擎</div><div class="box-desc">Web Search / 知识库</div></div>
+      </div>
+    </div>
+
+    <div class="arrow">⏬</div>
+
+    <div class="layer mcpp">
+      <div class="l-title">MCP 协议核心 <span class="tag mcp-tag">标准层</span></div>
+      <div class="l-sub">传输层 + 通信原语</div>
+      <div class="box-grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="box"><div class="box-icon">📦</div><div class="box-title">JSON-RPC 2.0</div><div class="box-desc">底层通信协议（请求-响应-通知）</div></div>
+        <div class="box"><div class="box-icon">🔌</div><div class="box-title">Transport</div><div class="box-desc">stdio（本地）或 SSE（远程）</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 32px;">
+    <h2 style="font-size: 16px; color: #e2e8f0; margin-bottom: 16px;">MCP 的三大核心能力</h2>
+    <div class="mcp-features">
+      <div class="mcp-feat">
+        <div class="mcp-icon">🛠️</div>
+        <div class="mcp-title">Tools</div>
+        <div class="mcp-desc">LLM 调用的工具<br>（有副作用，需用户确认）</div>
+      </div>
+      <div class="mcp-feat">
+        <div class="mcp-icon">📖</div>
+        <div class="mcp-title">Resources</div>
+        <div class="mcp-desc">LLM 读取的数据<br>（文件/数据库记录等）</div>
+      </div>
+      <div class="mcp-feat">
+        <div class="mcp-icon">💡</div>
+        <div class="mcp-title">Prompts</div>
+        <div class="mcp-desc">预置的提示模板<br>（快速启动特定任务）</div>
+      </div>
+      <div class="mcp-feat">
+        <div class="mcp-icon">🔄</div>
+        <div class="mcp-title">Sampling</div>
+        <div class="mcp-desc">服务端请求 LLM 补全<br>（反向调用，高级功能）</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="compare">
+    <div class="side left">
+      <h3>以前：无统一协议</h3>
+      <ul>
+        <li>每个工具单独写适配层</li>
+        <li>认证方式各搞一套</li>
+        <li>参数描述格式不统一</li>
+        <li>错误处理各自定义</li>
+        <li>换了 LLM 提供商就要重写</li>
+      </ul>
+    </div>
+    <div class="side right">
+      <h3>MCP 之后</h3>
+      <ul>
+        <li>一套协议对接所有工具</li>
+        <li>统一认证（OAuth 内置）</li>
+        <li>统一 JSON Schema</li>
+        <li>统一错误码和生命周期</li>
+        <li>换任何 LLM 都无缝兼容</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

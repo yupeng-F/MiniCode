@@ -1,0 +1,11 @@
+{
+  "description": "Ask 模式：任务应正常完成，状态为 completed",
+  "mode": "ask",
+  "input": "What does this project do?",
+  "min_score": 1.0,
+  "checks": [
+    {"type": "field_eq", "field": "status", "value": "completed"},
+    {"type": "field_eq", "field": "current_stage", "value": "final_response"},
+    {"type": "not_empty", "field": "final_answer"}
+  ]
+}

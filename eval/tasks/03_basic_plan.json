@@ -1,0 +1,10 @@
+{
+  "description": "Plan 模式：生成计划后完成",
+  "mode": "plan",
+  "input": "Add error handling to the main agent loop",
+  "min_score": 1.0,
+  "checks": [
+    {"type": "field_eq", "field": "status", "value": "completed"},
+    {"type": "field_eq", "field": "current_stage", "value": "final_response"}
+  ]
+}

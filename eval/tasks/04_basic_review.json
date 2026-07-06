@@ -1,0 +1,10 @@
+{
+  "description": "Review 模式：审查代码后完成",
+  "mode": "review",
+  "input": "Review the graph.py file for potential issues",
+  "min_score": 1.0,
+  "checks": [
+    {"type": "field_eq", "field": "status", "value": "completed"},
+    {"type": "field_eq", "field": "current_stage", "value": "final_response"}
+  ]
+}

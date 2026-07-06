@@ -1,0 +1,24 @@
+[project]
+name = "multi-agents"
+version = "0.1.0"
+description = "A LangGraph-based multi-agent orchestration scaffold."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.8.0",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
