@@ -148,11 +148,16 @@ Harness 安装器会复制 `lint/task-rules.yml`，其中当前前后端规则�
 
 `config/minicode-harness.yml` 为以下任务声明确定性覆盖：
 
+- 根级 `sprint_preflight`：使用 MiniCode 根命令进行离线环境检查，不要求尚未建设的
+  Docker Compose 环境。
 - `design`：加载通用设计哲学与 `docs/MINICODE_FRONTEND.md`，不加载 Vue 专属基线。
 - `backend-design`：加载 `docs/MINICODE_BACKEND.md`。
 - `frontend-design`：加载 `docs/MINICODE_FRONTEND.md`。
 - `code`：加载 MiniCode 前后端规范和验证命令，同时保留通用代码评审规范。
 - `test-case-gen` 与 `quality`：使用 `docs/MINICODE_TESTING.md` 定义项目测试结构和证据。
+
+覆盖范围同时包括规范引用、工具白名单、`infra_ready`、验收条件和 `quality` 入口命令，
+确保任务不会调用 Vue/Fastify 专属技能或尚不存在的 Docker 启动流程。
 
 覆盖程序只修改配置明确声明的字段。与 MiniCode 无关的 Harness 任务和未来新增的未知
 字段保持不变。连续应用两次后任务语义完全一致，即操作必须幂等。
@@ -201,7 +206,8 @@ Web 增加明确的 `typecheck`、`lint` 脚本以及 React/TypeScript 所需的
 2. 使用可控子进程测试快速失败和退出码传播。
 3. 使用临时 YAML 测试任务覆盖转换及幂等性。
 4. 测试 `doctor` 对缺失文件和过期覆盖层的错误说明。
-5. 先增加失败的 CLI/Web 冒烟测试，再实现必要接线。
+5. 先增加 CLI/Web 现有行为表征测试；若测试暴露缺陷，先补充精确复现缺陷的失败测试，
+   再进入红—绿修复循环。
 6. 单独执行每个公开 pnpm 命令。
 7. 执行完整 Python 与 Web 测试集。
 8. 确认 `/Users/fish/Code/harness` 没有修改。
@@ -215,4 +221,3 @@ Web 增加明确的 `typecheck`、`lint` 脚本以及 React/TypeScript 所需的
 5. 重新应用 MiniCode 覆盖层并运行 `doctor`。
 6. 检查安装 Diff，单独提交 Harness 安装结果。
 7. 从 `USER_STORIES.md` 启动第一个 Harness Feature Sprint。
-
