@@ -9,7 +9,7 @@ from minicode.runtime.harness import HarnessRuntime
 from minicode.runtime.policy_engine import PolicyEngine
 from minicode.runtime.tool_executor import ToolExecutor
 from minicode.runtime.workspace_manager import WorkspaceManager
-from minicode.schemas.session import Message, SessionState
+from minicode.schemas.session import Message, Mode, SessionState
 from minicode.storage.sqlite_store import SQLiteStore
 from minicode.tools import build_default_registry
 
@@ -25,7 +25,7 @@ class RunService:
         runtime = HarnessRuntime(registry, PolicyEngine(), executor)
         self.loop = QueryLoop(model or JsonScriptModel(), runtime, ContextManager(memory_service=memory), memory)
 
-    def run(self, prompt: str, mode: str = "act") -> SessionState:
+    def run(self, prompt: str, mode: Mode = "act") -> SessionState:
         session = SessionState(workspace=str(self.workspace.root), mode=mode, task=prompt)
         session.messages.append(Message(role="user", content=prompt))
         result = self.loop.run(session)

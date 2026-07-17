@@ -8,6 +8,8 @@ from uuid import uuid4
 from minicode.schemas.base import ModelMixin
 from minicode.schemas.tool import ToolCall, ToolCallRecord
 
+Mode = Literal["ask", "plan", "act", "review"]
+
 
 @dataclass(slots=True)
 class Message(ModelMixin):
@@ -21,7 +23,7 @@ class SessionState(ModelMixin):
     session_id: str = field(default_factory=lambda: str(uuid4()))
     run_id: str = field(default_factory=lambda: str(uuid4()))
     workspace: str = "."
-    mode: Literal["ask", "plan", "act", "review"] = "act"
+    mode: Mode = "act"
     status: Literal["pending", "running", "waiting_approval", "completed", "failed", "cancelled"] = "pending"
     task: str = ""
     messages: list[Message] = field(default_factory=list)

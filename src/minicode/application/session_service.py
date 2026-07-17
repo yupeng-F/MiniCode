@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from minicode.schemas.project import Project, SessionSummary
-from minicode.schemas.session import Message, SessionState
+from minicode.schemas.session import Message, Mode, SessionState
 from minicode.storage.global_store import GlobalStore
 
 
@@ -11,7 +11,7 @@ class SessionService:
     def __init__(self, store: GlobalStore) -> None:
         self.store = store
 
-    def create(self, project: Project, task: str, mode: str = "act") -> SessionState:
+    def create(self, project: Project, task: str, mode: Mode = "act") -> SessionState:
         session = SessionState(workspace=project.workspace, mode=mode, task=task)
         session.messages.append(Message(role="user", content=task))
         self.save(project.project_id, session)
@@ -38,7 +38,7 @@ class SessionService:
     def list_sessions(self, project_id: str) -> list[SessionSummary]:
         return self.store.list_sessions(project_id)
 
-    def start_run(self, session_id: str, content: str, mode: str | None = None) -> SessionState:
+    def start_run(self, session_id: str, content: str, mode: Mode | None = None) -> SessionState:
         session = self.get_session(session_id)
         if session is None:
             raise ValueError(f"Session not found: {session_id}")

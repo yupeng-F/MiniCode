@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import List
+
 from minicode.schemas.tool import ToolSpec
 
 
@@ -16,7 +18,7 @@ class ToolRegistry:
     def list(self) -> list[ToolSpec]:
         return list(self._tools.values())
 
-    def visible_tools(self, mode: str = "act", role: str = "assistant") -> list[ToolSpec]:
+    def visible_tools(self, mode: str = "act", role: str = "assistant") -> List[ToolSpec]:
         visible: list[ToolSpec] = []
         for spec in self._tools.values():
             if mode not in spec.allowed_modes:

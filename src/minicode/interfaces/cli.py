@@ -4,7 +4,7 @@ import argparse
 
 from minicode.application.run_service import RunService
 from minicode.engine.model_factory import ModelConfigurationError, ModelFactory
-from minicode.engine.model_client import JsonScriptModel
+from minicode.engine.model_client import JsonScriptModel, ModelClient
 
 
 def main() -> None:
@@ -17,6 +17,7 @@ def main() -> None:
     args = parser.parse_args()
 
     prompt = " ".join(args.prompt) or "List project files"
+    model: ModelClient
     if args.mock:
         model = JsonScriptModel([
             {"type": "tool_use", "tool_call": {"tool_name": "list_directory", "arguments": {"path": "."}, "intent": "Inspect workspace"}},

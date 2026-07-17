@@ -6,6 +6,7 @@ import os
 import queue
 import threading
 from pathlib import Path
+from typing import cast
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -23,7 +24,7 @@ from minicode.runtime.policy_engine import PolicyEngine
 from minicode.runtime.tool_executor import ToolExecutor
 from minicode.runtime.workspace_manager import WorkspaceManager
 from minicode.schemas.event import Event
-from minicode.schemas.session import SessionState
+from minicode.schemas.session import Mode, SessionState
 from minicode.storage.sqlite_store import SQLiteStore
 from minicode.storage.global_store import GlobalStore
 from minicode.tools import build_default_registry
@@ -35,7 +36,7 @@ _runs: dict[str, dict] = {}
 
 class RunRequest(BaseModel):
     input: str = ""
-    mode: str | None = None
+    mode: Mode | None = None
     workspace: str = "."
     session_id: str | None = None
 
@@ -195,7 +196,7 @@ async def create_session(project_id: str, req: SessionRequest) -> JSONResponse:
         raise HTTPException(status_code=404, detail="Project not found")
     if req.mode not in {"ask", "plan", "act", "review"}:
         raise HTTPException(status_code=400, detail="Unsupported session mode")
-    session = _session_service().create(project, req.input, req.mode)
+    session = _session_service().create(project, req.input, cast(Mode, req.mode))
     return JSONResponse(session.model_dump())
 
 

@@ -14,7 +14,7 @@ commands:
     - executable: npm
       args: [--prefix, web, run, lint]
     - executable: npm
-      args: [--prefix, web, audit, --audit-level=high]
+      args: [--prefix, web, audit, --audit-level=high, --registry=https://registry.npmjs.org]
   test:
     - executable: python
       args: [-m, pytest]

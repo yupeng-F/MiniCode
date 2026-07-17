@@ -5,6 +5,13 @@ import { api, type DirectoryEntry, type DirectoryListing, type FilePage, type Pr
 const modes = ["ask", "plan", "act", "review"];
 type ActiveRun = { runId: string; sessionId: string; projectId: string };
 
+export function toggleExpandedDirectory(current: Set<string>, path: string): Set<string> {
+  const next = new Set(current);
+  if (next.has(path)) next.delete(path);
+  else next.add(path);
+  return next;
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
@@ -105,7 +112,7 @@ export function App() {
   const toggleDirectory = async (path: string) => {
     const isOpen = expandedDirs.has(path);
     if (!isOpen && !fileTree[path] && project) { try { const listing = await api.listFiles(project.project_id, path); setFileTree(current => ({ ...current, [path]: listing.entries })); } catch (err) { report(err); return; } }
-    setExpandedDirs(current => { const next = new Set(current); isOpen ? next.delete(path) : next.add(path); return next; });
+    setExpandedDirs(current => toggleExpandedDirectory(current, path));
   };
   const loadMore = async () => { if (!project || !filePage?.next_offset || !selectedFile) return; try { const next = await api.readFile(project.project_id, selectedFile, filePage.next_offset); setFilePage(current => current ? { ...next, content: `${current.content}\n${next.content}`, offset: current.offset, total_lines: next.total_lines } : next); } catch (err) { report(err); } };
   const tools = useMemo(() => session?.tool_calls ?? [], [session]);

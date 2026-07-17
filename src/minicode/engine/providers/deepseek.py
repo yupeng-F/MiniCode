@@ -51,7 +51,7 @@ class DeepSeekModelClient(ModelClient):
             from openai import OpenAI
 
             client = OpenAI(api_key=api_key, base_url=self.base_url)
-        self.client = client
+        self.client: Any = client
         self.sensitive_filter = SensitiveDataFilter()
 
     def complete(

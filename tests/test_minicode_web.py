@@ -55,6 +55,20 @@ def test_web_reuses_existing_session_when_starting_a_run(tmp_path: Path):
     assert response.json()["run_id"] != session["run_id"]
 
 
+def test_web_rejects_an_unsupported_run_mode(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs",
+        json={"workspace": str(workspace), "input": "Inspect tests", "mode": "invalid"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_web_deletes_session_and_removes_project_history(tmp_path: Path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()

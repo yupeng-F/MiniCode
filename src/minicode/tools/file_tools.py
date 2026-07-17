@@ -18,9 +18,8 @@ def read_file_tool(call: ToolCall, workspace: WorkspaceManager, artifacts: Artif
     lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     selected = _fit_preview(lines[offset: offset + limit])
     content = "\n".join(selected)
-    next_offset = offset + len(selected)
-    if next_offset >= len(lines):
-        next_offset = None
+    next_offset_value = offset + len(selected)
+    next_offset: int | None = None if next_offset_value >= len(lines) else next_offset_value
     truncated = next_offset is not None
     artifact_ref = artifacts.put(run_id, f"read-{path.name}", "\n".join(lines)) if truncated else None
     if selected:
