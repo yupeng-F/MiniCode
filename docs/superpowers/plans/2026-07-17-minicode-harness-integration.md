@@ -55,6 +55,7 @@ tests/test_harness_smoke.py                # CLI/Web 离线冒烟
 web/package.json                           # Web typecheck/lint 命令
 web/package-lock.json                      # Web 新依赖锁
 web/eslint.config.js                       # React/TypeScript Lint 配置
+web/src/api.test.ts                        # Web API Client 表征测试
 ```
 
 ---
@@ -728,6 +729,7 @@ git commit -m "docs: add MiniCode Harness project specifications"
 - 修改：`web/package.json`
 - 修改：`web/package-lock.json`
 - 新建：`web/eslint.config.js`
+- 新建：`web/src/api.test.ts`
 
 **接口：**
 
@@ -735,7 +737,59 @@ git commit -m "docs: add MiniCode Harness project specifications"
 - Web 提供 `npm --prefix web run typecheck` 和 `npm --prefix web run lint`。
 - 冒烟测试离线验证 CLI 与 Web 入口。
 
-- [ ] **步骤 1：先写 CLI/Web 冒烟测试**
+- [ ] **步骤 1：先写 Web API Client 表征测试**
+
+新增 `web/src/api.test.ts`：
+
+```typescript
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { api } from "./api";
+
+describe("MiniCode API Client", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("从项目列表接口解析成功响应", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify([{ project_id: "p-1", workspace: "/tmp/demo", title: "Demo" }]),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await expect(api.listProjects()).resolves.toEqual([
+      { project_id: "p-1", workspace: "/tmp/demo", title: "Demo" },
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith("/api/projects", {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  it("非成功响应抛出后端错误信息", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Project not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(api.listProjects()).rejects.toThrow("Project not found");
+  });
+});
+```
+
+- [ ] **步骤 2：运行 Web 表征测试**
+
+```bash
+npm --prefix web test
+```
+
+预期：2 个测试 PASS。测试覆盖现有行为，不要求生产代码变更；若失败则保留失败证据，
+先判断是否为既有 API Client 缺陷，再按红—绿循环修复。
+
+- [ ] **步骤 3：写 CLI/Web 冒烟测试**
 
 新增 `tests/test_harness_smoke.py`：
 
@@ -782,7 +836,7 @@ def test_web_index_uses_temporary_global_store(tmp_path: Path) -> None:
     }
 ```
 
-- [ ] **步骤 2：运行现有行为表征测试**
+- [ ] **步骤 4：运行现有行为表征测试**
 
 ```bash
 pnpm test:e2e
@@ -792,7 +846,7 @@ pnpm test:e2e
 是否暴露既有缺陷；若是，则保留当前失败作为 RED 证据，增加更精确的回归断言后再修复，
 不得为了让接入通过而删除断言。
 
-- [ ] **步骤 3：增加 Python 开发依赖和保守基线配置**
+- [ ] **步骤 5：增加 Python 开发依赖和保守基线配置**
 
 在 `pyproject.toml` 的 `dev` 依赖增加：
 
@@ -822,7 +876,7 @@ select = ["E9", "F63", "F7", "F82"]
 这一步只启用会导致运行错误的 Ruff 规则，后续 Sprint 再扩大风格规则，避免在接入任务中
 混入无关格式化修改。
 
-- [ ] **步骤 4：安装 Python 开发依赖**
+- [ ] **步骤 6：安装 Python 开发依赖**
 
 ```bash
 python -m pip install -e '.[dev]'
@@ -830,7 +884,7 @@ python -m pip install -e '.[dev]'
 
 预期：安装成功，`python -m mypy --version` 与 `python -m ruff --version` 均退出 0。
 
-- [ ] **步骤 5：增加 Web 类型检查与 ESLint**
+- [ ] **步骤 7：增加 Web 类型检查与 ESLint**
 
 在 `web/package.json` scripts 增加：
 
@@ -865,15 +919,16 @@ export default tseslint.config(
 );
 ```
 
-- [ ] **步骤 6：安装工具链后重新运行冒烟测试**
+- [ ] **步骤 8：安装工具链后重新运行 Web 与冒烟测试**
 
 ```bash
+npm --prefix web test
 pnpm test:e2e
 ```
 
-预期：2 个测试 PASS，且没有真实模型或 API Key 请求。
+预期：Web 2 个测试 PASS，Python 冒烟 2 个测试 PASS，且没有真实模型或 API Key 请求。
 
-- [ ] **步骤 7：逐个运行根命令并修复真实阻塞**
+- [ ] **步骤 9：逐个运行根命令并修复真实阻塞**
 
 按顺序执行：
 
@@ -887,7 +942,7 @@ pnpm build
 预期：四个命令全部退出 0。只允许修复命令暴露的真实类型、Lint、测试或构建问题；不得
 降低配置标准或跳过失败子命令。任何代码修复都必须先补充能复现问题的测试。
 
-- [ ] **步骤 8：运行适配器单元测试**
+- [ ] **步骤 10：运行适配器单元测试**
 
 ```bash
 pnpm test:harness
@@ -895,10 +950,10 @@ pnpm test:harness
 
 预期：所有 Node 单元测试 PASS。
 
-- [ ] **步骤 9：提交任务 5**
+- [ ] **步骤 11：提交任务 5**
 
 ```bash
-git add pyproject.toml tests/test_harness_smoke.py web/package.json web/package-lock.json web/eslint.config.js
+git add pyproject.toml tests/test_harness_smoke.py web/package.json web/package-lock.json web/eslint.config.js web/src/api.test.ts
 git commit -m "build: connect Python and Web Harness checks"
 ```
 
