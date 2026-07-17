@@ -9,7 +9,9 @@
     "test": "node tools/harness-check.mjs test",
     "build": "node tools/harness-check.mjs build",
     "test:e2e": "node tools/harness-check.mjs test:e2e",
-    "test:harness": "node --test tools/harness/*.test.mjs"
+    "test:harness": "node --test tools/harness/*.test.mjs",
+    "harness:overlay": "node tools/harness-check.mjs overlay",
+    "harness:doctor": "node tools/harness-check.mjs doctor"
   },
   "dependencies": {
     "yaml": "^2.8.1"
