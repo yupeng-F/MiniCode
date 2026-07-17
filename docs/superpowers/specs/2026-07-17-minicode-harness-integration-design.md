@@ -1,48 +1,49 @@
-# MiniCode Harness Integration Design
+# MiniCode Harness 接入设计
 
-## 1. Goal
+## 1. 目标
 
-Integrate Harness Engineering into MiniCode without changing `/Users/fish/Code/harness`.
-MiniCode will provide a project-owned compatibility layer for Harness commands and a
-project-owned specification overlay for its Python/FastAPI and React/Vite stack.
+在不修改 `/Users/fish/Code/harness` 的前提下，将 Harness Engineering 接入
+MiniCode。MiniCode 在项目内部提供 Harness 命令兼容层，并为 Python/FastAPI、
+React/Vite 技术栈提供项目专属规范覆盖层。
 
-The integration must let Harness plan, execute, review, and verify MiniCode work
-without interpreting MiniCode as a Fastify/Vue project.
+接入完成后，Harness 应能正确规划、执行、评审和验证 MiniCode 的开发任务，
+不得把 MiniCode 错误识别为 Fastify/Vue 项目。
 
-## 2. Non-goals
+## 2. 非目标
 
-- Do not modify Harness Engineering source files.
-- Do not migrate MiniCode from React to Vue or from Python to Node.js.
-- Do not replace MiniCode's internal `HarnessRuntime`; it is a product component,
-  distinct from the external Harness Engineering framework.
-- Do not add Test/Production deployment or cloud-native delivery in this phase.
-- Do not call a real LLM or require an API key in automated tests.
-- Do not build the full Playwright user-journey suite in this phase.
+- 不修改 Harness Engineering 源代码。
+- 不把 MiniCode 从 React 迁移到 Vue，也不把 Python 后端迁移到 Node.js。
+- 不替换 MiniCode 内部的 `HarnessRuntime`；它是产品组件，与外部研发框架不同。
+- 本阶段不建设 Test/Production 部署和云原生交付。
+- 自动化测试不调用真实大模型，不要求提供 API Key。
+- 本阶段不建设完整的 Playwright 用户旅程测试集。
 
-## 3. Terminology and ownership
+## 3. 语言约束
 
-- **Harness Engineering**: the external development-governance framework installed
-  into MiniCode.
-- **MiniCode Harness Runtime**: MiniCode's internal safe tool-execution boundary.
-- **Shared Harness files**: files copied by the Harness installer and replaced by a
-  later Harness sync.
-- **MiniCode overlay**: project-owned configuration and documentation reapplied after
-  every Harness sync.
+- 新增设计文档、实施计划、项目说明和代码注释统一使用中文。
+- 技术标识符、API、类名、函数名、命令、文件路径保持英文。
+- 没有通用中文译法的术语可以保留英文，但首次出现时应说明含义。
+- 注释用于解释设计原因、边界和非显然行为，不逐行翻译代码。
 
-Harness owns generic workflow rules. MiniCode owns its architecture, technology
-choices, verification commands, and project-specific acceptance criteria.
+## 4. 术语与所有权
 
-## 4. Architecture
+- **Harness Engineering**：安装到 MiniCode 的外部研发治理框架。
+- **MiniCode Harness Runtime**：MiniCode 内部负责安全执行工具的运行时边界。
+- **Harness 共享文件**：由 Harness 安装器复制，后续同步可能覆盖的文件。
+- **MiniCode 覆盖层**：每次 Harness 同步后重新应用的项目配置和项目规范。
 
-The integration has three project-owned layers:
+Harness 负责通用工作流。MiniCode 负责自身架构、技术选型、验证命令和项目验收标准。
 
-1. A root pnpm interface that exposes the command names Harness already calls.
-2. A modular Node.js adapter that executes MiniCode's real Python and Web checks.
-3. A specification overlay that redirects installed task rules away from
-   Fastify/Vue assumptions and toward MiniCode documents.
+## 5. 总体架构
+
+接入由三个 MiniCode 自有层组成：
+
+1. 根目录 pnpm 接口：暴露 Harness 已经固定调用的命令名。
+2. 模块化 Node.js 适配器：执行 MiniCode 真实的 Python 和 Web 检查。
+3. 项目规范覆盖层：把任务规则从 Fastify/Vue 假设重定向到 MiniCode 规范。
 
 ```text
-Harness task or quality script
+Harness 任务或质量脚本
         |
         v
 pnpm typecheck | lint | test | build | test:e2e
@@ -50,179 +51,168 @@ pnpm typecheck | lint | test | build | test:e2e
         v
 tools/harness-check.mjs
         |
-        +--> Python: mypy / ruff / pytest / build
-        +--> Web: TypeScript / ESLint / Vitest / Vite
+        +--> Python：mypy / ruff / pytest / build
+        +--> Web：TypeScript / ESLint / Vitest / Vite
 
-Harness sync
+Harness 同步
         |
         v
 pnpm harness:overlay
         |
         v
-MiniCode task-rule references and acceptance criteria restored
+恢复 MiniCode 任务规范引用和验收条件
         |
         v
 pnpm harness:doctor
 ```
 
-## 5. Command adapter
+## 6. 命令适配器
 
-### 5.1 Public interface
+### 6.1 对外接口
 
-MiniCode's root `package.json` will expose:
+MiniCode 根目录 `package.json` 提供以下脚本：
 
-| Script | Purpose |
+| 脚本 | 用途 |
 |---|---|
-| `pnpm typecheck` | Python and Web type checking |
-| `pnpm lint` | Python and Web linting plus dependency consistency checks |
-| `pnpm test` | Python and Web unit/integration tests |
-| `pnpm build` | Python wheel and production Web bundle |
-| `pnpm test:e2e` | Offline CLI and Web smoke tests |
-| `pnpm harness:overlay` | Reapply MiniCode task-rule overrides after Harness sync |
-| `pnpm harness:doctor` | Validate files, dependencies, commands, and active overlay |
+| `pnpm typecheck` | Python 与 Web 类型检查 |
+| `pnpm lint` | Python/Web Lint 与依赖一致性检查 |
+| `pnpm test` | Python 与 Web 单元/集成测试 |
+| `pnpm build` | 构建 Python wheel 和 Web 生产包 |
+| `pnpm test:e2e` | 离线 CLI/Web 冒烟测试 |
+| `pnpm harness:overlay` | Harness 同步后重新应用 MiniCode 任务覆盖 |
+| `pnpm harness:doctor` | 检查文件、依赖、命令和覆盖层状态 |
 
-### 5.2 Internal modules
+### 6.2 内部模块
 
 ```text
 tools/
-  harness-check.mjs          # CLI entry point and command dispatch
+  harness-check.mjs          # CLI 入口与命令分发
   harness/
-    command-runner.mjs       # sequential fail-fast process execution
-    config-loader.mjs        # load and validate MiniCode adapter configuration
-    overlay.mjs              # deterministic task-rules.yml transformation
-    doctor.mjs               # read-only installation and configuration checks
+    command-runner.mjs       # 顺序执行进程并快速失败
+    config-loader.mjs        # 加载并校验 MiniCode 适配配置
+    overlay.mjs              # 确定性转换 task-rules.yml
+    doctor.mjs               # 只读检查安装和配置状态
 ```
 
-The CLI entry point stays small. Each module has one responsibility and can be unit
-tested without running the full Harness workflow.
+入口文件保持精简。每个模块只承担一个职责，并能脱离完整 Harness 流程独立测试。
 
-### 5.3 Command configuration
+### 6.3 命令配置
 
-`config/minicode-harness.yml` is the MiniCode-owned source of truth. Commands are
-stored as executable-plus-argument arrays rather than shell strings, avoiding shell
-quoting and command-injection ambiguity.
+`config/minicode-harness.yml` 是 MiniCode 适配层的单一真相源。命令使用“可执行文件 +
+参数数组”表示，不保存为 Shell 字符串，避免转义差异和命令注入歧义。
 
-The initial command graph is:
+初始命令图：
 
-| Phase | Commands, in order |
+| 阶段 | 按顺序执行的命令 |
 |---|---|
-| `typecheck` | `python -m mypy src/minicode`; `npm --prefix web run typecheck` |
-| `lint` | `python -m ruff check src/minicode tests`; `python -m pip check`; `npm --prefix web run lint`; `npm --prefix web audit --audit-level=high` |
-| `test` | `python -m pytest`; `npm --prefix web test` |
-| `build` | `python -m build --wheel`; `npm --prefix web run build` |
+| `typecheck` | `python -m mypy src/minicode`；`npm --prefix web run typecheck` |
+| `lint` | `python -m ruff check src/minicode tests`；`python -m pip check`；`npm --prefix web run lint`；`npm --prefix web audit --audit-level=high` |
+| `test` | `python -m pytest`；`npm --prefix web test` |
+| `build` | `python -m build --wheel`；`npm --prefix web run build` |
 | `test:e2e` | `python -m pytest tests/test_harness_smoke.py` |
 
-Commands execute sequentially. The first non-zero result stops the phase and the
-adapter returns the same non-zero result. Output is streamed directly so Harness and
-CI preserve the original failure evidence.
+命令顺序执行。第一个非零退出结果立即终止阶段，适配器返回同一非零结果。标准输出和
+标准错误直接透传，使 Harness 和 CI 保留原始失败证据。
 
-## 6. Minimal smoke coverage
+## 7. 最小冒烟覆盖
 
-`tests/test_harness_smoke.py` will cover two offline product entry points:
+`tests/test_harness_smoke.py` 覆盖两个离线产品入口：
 
-1. Launch `python -m minicode.interfaces.cli --mock --workspace <temp-dir>` and
-   verify successful completion and the mock-loop final answer.
-2. Use FastAPI `TestClient` with a temporary global-store path, request `/`, and
-   verify that MiniCode identifies itself and reports the expected architecture.
+1. 启动 `python -m minicode.interfaces.cli --mock --workspace <临时目录>`，验证程序成功
+   结束并输出 Mock Tool-Use Loop 的最终结果。
+2. 使用 FastAPI `TestClient` 和临时全局数据库路径请求 `/`，验证应用名称和架构描述。
 
-This is a real CLI/Web smoke test but not the final user-journey E2E suite. Full
-Playwright scenarios will be added by later feature sprints after Harness installation.
+这是真实的 CLI/Web 冒烟测试，但不是最终用户旅程 E2E。完整 Playwright 场景在
+Harness 安装后通过后续 Feature Sprint 增加。
 
-## 7. MiniCode project specifications
+## 8. MiniCode 项目规范
 
-The following project-owned documents will be added:
+新增以下 MiniCode 自有文档：
 
-| File | Responsibility |
+| 文件 | 职责 |
 |---|---|
-| `ARCHITECTURE.md` | Compact Harness entry point; links to `docs/01_项目目标与架构设计.md` as the detailed architecture source |
-| `PROJECT_RULES.md` | Python/React rules, module boundaries, Runtime safety invariants, and pre-commit requirements |
-| `USER_STORIES.md` | Product backlog and automatically verifiable acceptance criteria |
-| `docs/MINICODE_BACKEND.md` | FastAPI, Pydantic, SQLite, error handling, persistence, and concurrency rules |
-| `docs/MINICODE_FRONTEND.md` | React, Vite, API client, UI state, accessibility, and build rules |
-| `docs/MINICODE_TESTING.md` | pytest/Vitest/smoke layers, mock boundaries, coverage, and real-model test policy |
+| `ARCHITECTURE.md` | Harness 架构入口；详细架构指向 `docs/01_项目目标与架构设计.md` |
+| `PROJECT_RULES.md` | Python/React 规则、模块边界、Runtime 安全不变式和提交前要求 |
+| `USER_STORIES.md` | 产品待办及可自动验证的验收标准 |
+| `docs/MINICODE_BACKEND.md` | FastAPI、Pydantic、SQLite、错误处理、持久化与并发规范 |
+| `docs/MINICODE_FRONTEND.md` | React、Vite、API Client、UI 状态、可访问性与构建规范 |
+| `docs/MINICODE_TESTING.md` | pytest/Vitest/冒烟测试分层、Mock 边界、覆盖率与真实模型测试规则 |
 
-These documents describe MiniCode only. Generic Sprint, review, release, and
-observability rules remain owned by Harness Engineering.
+这些文档只描述 MiniCode。通用 Sprint、评审、发布和可观测性规范继续由 Harness
+Engineering 维护。
 
-## 8. Task-rule overlay
+## 9. 任务规则覆盖层
 
-The Harness installer copies `lint/task-rules.yml`, whose current frontend and backend
-rules assume Vue and Fastify. MiniCode cannot use those task references unchanged.
+Harness 安装器会复制 `lint/task-rules.yml`，其中当前前后端规则带有 Vue/Fastify
+假设，MiniCode 不能直接采用这些引用和验收条件。
 
-`config/minicode-harness.yml` will declare deterministic overrides for these tasks:
+`config/minicode-harness.yml` 为以下任务声明确定性覆盖：
 
-- `design`: use the generic design philosophy plus `docs/MINICODE_FRONTEND.md`, not
-  the Vue-specific UI baseline.
-- `backend-design`: use `docs/MINICODE_BACKEND.md`.
-- `frontend-design`: use `docs/MINICODE_FRONTEND.md`.
-- `code`: use MiniCode backend/frontend specifications and MiniCode verification
-  commands while retaining the generic code-review specification.
-- `test-case-gen` and `quality`: use `docs/MINICODE_TESTING.md` for project-specific
-  test structure and acceptance evidence.
+- `design`：加载通用设计哲学与 `docs/MINICODE_FRONTEND.md`，不加载 Vue 专属基线。
+- `backend-design`：加载 `docs/MINICODE_BACKEND.md`。
+- `frontend-design`：加载 `docs/MINICODE_FRONTEND.md`。
+- `code`：加载 MiniCode 前后端规范和验证命令，同时保留通用代码评审规范。
+- `test-case-gen` 与 `quality`：使用 `docs/MINICODE_TESTING.md` 定义项目测试结构和证据。
 
-The overlay transforms only declared fields. Unrelated Harness tasks and future
-unknown fields remain untouched. Applying the overlay twice produces byte-equivalent
-task semantics, making the operation idempotent.
+覆盖程序只修改配置明确声明的字段。与 MiniCode 无关的 Harness 任务和未来新增的未知
+字段保持不变。连续应用两次后任务语义完全一致，即操作必须幂等。
 
-After every Harness sync the required sequence is:
+每次 Harness 同步后执行：
 
 ```bash
 pnpm harness:overlay
 pnpm harness:doctor
 ```
 
-`doctor` fails if task rules still reference Vue/Fastify acceptance criteria, required
-MiniCode documents are missing, command dependencies are unavailable, or the overlay
-has not been applied.
+如果任务规则仍包含 Vue/Fastify 验收条件、MiniCode 规范缺失、命令依赖不可用，或者
+覆盖层尚未应用，`doctor` 必须返回非零结果。
 
-## 9. Tooling changes
+## 10. 工具链变更
 
-Python development dependencies will include:
+Python 开发依赖增加：
 
 - `pytest`
 - `mypy`
 - `ruff`
 - `build`
 
-Web development tooling will add explicit `typecheck` and `lint` scripts plus the
-minimal ESLint packages needed for React and TypeScript. The existing npm-managed
-`web/package-lock.json` remains authoritative for Web dependencies. Root pnpm is only
-the Harness-facing command interface and overlay tool host.
+Web 增加明确的 `typecheck`、`lint` 脚本以及 React/TypeScript 所需的最小 ESLint
+依赖。现有 npm 管理的 `web/package-lock.json` 继续作为 Web 依赖真源。根目录 pnpm
+只作为 Harness 命令入口和覆盖工具宿主。
 
-The root package will depend on a YAML parser for validated command and overlay
-configuration. No general-purpose task-runner dependency is introduced.
+根目录包只增加用于校验命令和覆盖配置的 YAML 解析器，不引入通用任务运行器。
 
-## 10. Error handling and safety
+## 11. 错误处理与安全边界
 
-- Unknown adapter phases fail with a usage message and non-zero status.
-- Invalid or missing YAML fields fail before any command or overlay write.
-- The overlay resolves and validates the MiniCode repository root before writing.
-- The overlay may write only `lint/task-rules.yml` inside the MiniCode repository.
-- `doctor` is read-only.
-- Smoke tests use temporary directories and temporary SQLite files.
-- No test reads user-level MiniCode state or real API credentials.
-- Command output never embeds environment-variable values.
+- 未知适配阶段输出用法并返回非零结果。
+- YAML 字段缺失或非法时，在执行命令或写覆盖文件前失败。
+- 覆盖程序写入前解析并验证 MiniCode 仓库根目录。
+- 覆盖程序只能写 MiniCode 仓库内的 `lint/task-rules.yml`。
+- `doctor` 始终只读。
+- 冒烟测试只使用临时目录和临时 SQLite 文件。
+- 测试不得读取用户级 MiniCode 状态或真实 API 凭据。
+- 命令输出不得打印环境变量值。
 
-## 11. Verification strategy
+## 12. 验证策略
 
-Implementation follows test-driven development:
+实施过程遵循测试驱动开发：
 
-1. Unit-test configuration validation and command planning.
-2. Unit-test fail-fast exit propagation with controlled child processes.
-3. Unit-test task-rule overlay transformation and idempotence using temporary YAML.
-4. Unit-test doctor failure messages for missing and stale overlay state.
-5. Add failing CLI/Web smoke tests, then implement only required test wiring.
-6. Run each public pnpm command independently.
-7. Run the complete Python and Web suites.
-8. Confirm `/Users/fish/Code/harness` has no modified files.
+1. 先测试配置校验与命令计划。
+2. 使用可控子进程测试快速失败和退出码传播。
+3. 使用临时 YAML 测试任务覆盖转换及幂等性。
+4. 测试 `doctor` 对缺失文件和过期覆盖层的错误说明。
+5. 先增加失败的 CLI/Web 冒烟测试，再实现必要接线。
+6. 单独执行每个公开 pnpm 命令。
+7. 执行完整 Python 与 Web 测试集。
+8. 确认 `/Users/fish/Code/harness` 没有修改。
 
-## 12. Delivery sequence
+## 13. 交付顺序
 
-1. Implement and verify the MiniCode compatibility layer and specifications.
-2. Commit the compatibility layer separately.
-3. Run Harness `--dry-run` against MiniCode.
-4. Install Harness with `--no-commit`.
-5. Reapply the MiniCode overlay and run `doctor`.
-6. Review the install diff and commit the Harness installation separately.
-7. Start the first Harness feature sprint from `USER_STORIES.md`.
+1. 实现并验证 MiniCode 兼容层和项目规范。
+2. 单独提交兼容层。
+3. 对 MiniCode 执行 Harness `--dry-run`。
+4. 使用 `--no-commit` 安装 Harness。
+5. 重新应用 MiniCode 覆盖层并运行 `doctor`。
+6. 检查安装 Diff，单独提交 Harness 安装结果。
+7. 从 `USER_STORIES.md` 启动第一个 Harness Feature Sprint。
 
