@@ -60,7 +60,7 @@ web/src/api.test.ts                        # Web API Client 表征测试
 
 ---
 
-### 任务 1：建立根命令入口和配置加载器
+### Task 1：建立根命令入口和配置加载器
 
 **文件：**
 
@@ -296,7 +296,7 @@ git commit -m "feat: add MiniCode Harness adapter config"
 
 ---
 
-### 任务 2：实现可测试的命令执行器和 CLI 分发
+### Task 2：实现可测试的命令执行器和 CLI 分发
 
 **文件：**
 
@@ -448,7 +448,7 @@ git commit -m "feat: add fail-fast Harness command runner"
 
 ---
 
-### 任务 3：实现任务规则覆盖和只读 Doctor
+### Task 3：实现任务规则覆盖和只读 Doctor
 
 **文件：**
 
@@ -616,7 +616,7 @@ git commit -m "feat: add MiniCode Harness overlay and doctor"
 
 ---
 
-### 任务 4：建立 MiniCode 项目规范单一真相源
+### Task 4：建立 MiniCode 项目规范单一真相源
 
 **文件：**
 
@@ -720,7 +720,7 @@ git commit -m "docs: add MiniCode Harness project specifications"
 
 ---
 
-### 任务 5：接入 Python/Web 工具链和离线冒烟测试
+### Task 5：接入 Python/Web 工具链和离线冒烟测试
 
 **文件：**
 
@@ -959,7 +959,7 @@ git commit -m "build: connect Python and Web Harness checks"
 
 ---
 
-### 任务 6：安装 Harness、应用覆盖并验证接入
+### Task 6：安装 Harness、应用覆盖并验证接入
 
 **文件：**
 
