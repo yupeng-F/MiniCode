@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 
@@ -50,6 +50,16 @@ export function applyOverlay(root, config) {
     isAbsolute(targetRelativePath)
   ) {
     throw new Error("Harness 覆盖只能写入 lint/task-rules.yml");
+  }
+
+  const lintDirectory = resolve(normalizedRoot, "lint");
+  if (lstatSync(lintDirectory).isSymbolicLink() || lstatSync(target).isSymbolicLink()) {
+    throw new Error("Harness 覆盖检测到符号链接，拒绝写入 lint/task-rules.yml");
+  }
+  const realRoot = realpathSync(normalizedRoot);
+  const realTarget = realpathSync(target);
+  if (relative(realRoot, realTarget) !== expectedRelativePath) {
+    throw new Error("Harness 覆盖目标真实路径已逃逸 MiniCode 根目录，拒绝写入");
   }
 
   const document = parse(readFileSync(target, "utf8"));

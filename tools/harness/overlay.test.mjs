@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -96,6 +96,43 @@ test("拒绝覆盖 lint/task-rules.yml 之外的路径", () => {
   };
 
   assert.throws(() => applyOverlay(root, config), /只能写入 lint\/task-rules\.yml/);
+});
+
+test("拒绝通过 lint 目录符号链接写到 MiniCode 根外", () => {
+  const root = mkdtempSync(join(tmpdir(), "minicode-overlay-"));
+  const outside = mkdtempSync(join(tmpdir(), "minicode-overlay-outside-"));
+  const outsideRules = join(outside, "task-rules.yml");
+  const original = "version: '1.6'\ntasks:\n  code:\n    spec-backend: CODING_BACKEND.md\n";
+  writeFileSync(outsideRules, original);
+  symlinkSync(outside, join(root, "lint"), "dir");
+  const config = {
+    overlay: {
+      task_rules: "lint/task-rules.yml",
+      task_overrides: { code: { "spec-backend": "MINICODE_BACKEND.md" } },
+    },
+  };
+
+  assert.throws(() => applyOverlay(root, config), /符号链接.*拒绝写入/);
+  assert.equal(readFileSync(outsideRules, "utf8"), original);
+});
+
+test("拒绝通过 task-rules 文件符号链接写到 MiniCode 根外", () => {
+  const root = mkdtempSync(join(tmpdir(), "minicode-overlay-"));
+  const outside = mkdtempSync(join(tmpdir(), "minicode-overlay-outside-"));
+  const outsideRules = join(outside, "outside-rules.yml");
+  const original = "version: '1.6'\ntasks:\n  code:\n    spec-backend: CODING_BACKEND.md\n";
+  mkdirSync(join(root, "lint"));
+  writeFileSync(outsideRules, original);
+  symlinkSync(outsideRules, join(root, "lint", "task-rules.yml"), "file");
+  const config = {
+    overlay: {
+      task_rules: "lint/task-rules.yml",
+      task_overrides: { code: { "spec-backend": "MINICODE_BACKEND.md" } },
+    },
+  };
+
+  assert.throws(() => applyOverlay(root, config), /符号链接.*拒绝写入/);
+  assert.equal(readFileSync(outsideRules, "utf8"), original);
 });
 
 test("CLI overlay 分发应用覆盖并输出中文结果", () => {
