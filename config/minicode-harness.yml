@@ -1,0 +1,83 @@
+version: 1
+
+commands:
+  typecheck:
+    - executable: python
+      args: [-m, mypy, src/minicode]
+    - executable: npm
+      args: [--prefix, web, run, typecheck]
+  lint:
+    - executable: python
+      args: [-m, ruff, check, src/minicode, tests]
+    - executable: python
+      args: [-m, pip, check]
+    - executable: npm
+      args: [--prefix, web, run, lint]
+    - executable: npm
+      args: [--prefix, web, audit, --audit-level=high]
+  test:
+    - executable: python
+      args: [-m, pytest]
+    - executable: npm
+      args: [--prefix, web, test]
+  build:
+    - executable: python
+      args: [-m, build, --wheel]
+    - executable: npm
+      args: [--prefix, web, run, build]
+  test:e2e:
+    - executable: python
+      args: [-m, pytest, tests/test_harness_smoke.py]
+
+overlay:
+  task_rules: lint/task-rules.yml
+  root_overrides:
+    sprint_preflight:
+      command: pnpm typecheck
+      ttl_seconds: 1800
+      on_failure: 展示失败证据并停止任务，修复后重新执行
+  task_overrides:
+    design:
+      specs: [DESIGN.md, MINICODE_FRONTEND.md]
+      acceptance:
+        - 设计符合 MiniCode React 界面与现有视觉语言
+        - 主路径、异常路径、加载状态和审批状态完整
+        - 设计结果可以通过 Web 测试或后续 Playwright 场景验证
+    backend-design:
+      spec: MINICODE_BACKEND.md
+      tools:
+        allow: [file-rw, search, explore]
+      acceptance:
+        - 后端方案符合 FastAPI、Pydantic 与 SQLite 项目约束
+        - 工具副作用必须经过 MiniCode Harness Runtime
+        - 接口、持久化和错误路径均有可验证设计
+    frontend-design:
+      spec: MINICODE_FRONTEND.md
+      specs: [MINICODE_FRONTEND.md]
+      tools:
+        allow: [file-rw, search, explore, chrome-devtools, webapp-testing]
+      acceptance:
+        - 前端方案使用 React、TypeScript 与 Vite
+        - API 调用集中在 web/src/api.ts
+        - 可访问性、错误状态和构建验证完整
+    code:
+      spec-backend: MINICODE_BACKEND.md
+      spec-frontend: MINICODE_FRONTEND.md
+      specs-frontend: [MINICODE_FRONTEND.md]
+      tools:
+        allow: [file-rw, search, bash, sub-agent, chrome-devtools, webapp-testing]
+      infra_ready: pnpm typecheck
+      acceptance:
+        - pnpm typecheck、pnpm lint、pnpm test 全部通过
+        - MiniCode Runtime 安全不变式未被绕过
+        - 新增或变更行为有自动化测试
+    test-case-gen:
+      spec: MINICODE_TESTING.md
+    quality:
+      spec: MINICODE_TESTING.md
+      entry_command: pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:e2e
+      infra_ready: pnpm typecheck
+      acceptance:
+        - entry_command 退出码为 0
+        - Python、Web、构建和离线冒烟证据完整
+        - 质量报告记录每条命令的真实结果

@@ -1,0 +1,12 @@
+{
+  "name": "minicode-harness-adapter",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.31.0",
+  "scripts": {
+    "test:harness": "node --test tools/harness/*.test.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  }
+}
