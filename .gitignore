@@ -18,6 +18,7 @@ sigma/
 学习文档/
 .reasonix/
 .worktrees/
+.superpowers/
 
 # Build artifacts
 *.egg-info/
