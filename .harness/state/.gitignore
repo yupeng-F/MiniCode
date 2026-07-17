@@ -1,0 +1,7 @@
+# state/ 子目录占位：保留索引文件入库（test-env.lock / promotion-log.yml 等由脚本写入）
+*.lock
+*.log
+!.gitignore
+!README.md
+!harness-version.txt
+!promotion-log.yml

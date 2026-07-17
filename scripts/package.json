@@ -1,0 +1,9 @@
+{
+  "name": "@mai-harness/scripts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@playwright/test": "^1.55.0",
+    "js-yaml": "^4.1.0"
+  }
+}

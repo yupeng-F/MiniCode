@@ -1,0 +1,41 @@
+# Harness Engineering — 框架级配置（项目级覆盖）
+#
+# 本文件是 Harness 框架行为的项目级真源。
+# 由 scripts/lib/harness-config.mjs 加载；缺失或 schema 错误 = preflight FAIL。
+#
+# 所有任务规则、质量门禁、走查环境、部署模式均由本文件决定。
+# 安装时 install.sh 会基于默认值生成本文件；后续修改不会被覆盖。
+
+version: 1
+
+# ─── AI 平台支持 ─────────────────────────────────────────────────────
+# 声明项目使用的 AI 能力底座，install.sh 会根据此项分发对应的文件。
+# 可选值：agy (Antigravity CLI)、copilot (GitHub Copilot)
+# 支持同时声明多个：[agy, copilot]
+# 默认值：[agy]
+ai_platform:
+  - agy
+
+# ─── 走查环境模式 ─────────────────────────────────────────────────────
+# development: code → test-case-gen → quality → product-acceptance(本地/dev) → pr → close
+# test:        code → test-case-gen → promote-prep → build-image → promote-test → quality → product-acceptance(test) → pr → close
+walkthrough_env: development
+
+# ─── 门禁配置 ─────────────────────────────────────────────────────
+gates:
+  # UI 设计是否需要人工 L3 通过才能进入后续任务
+  ui_design_l3: false
+  # 质量评分通过阈值（quality-score.mjs 读取）
+  quality_threshold: 95
+
+# ─── 部署模式 ─────────────────────────────────────────────────────
+# docker:        promote-prep 生成 docker-compose.yml + 部署脚本（默认）
+# cloud-native:  保留接口，当前未实现；脚本读到会显式报错
+deploy:
+  test_mode: docker
+  prod_mode: docker
+
+# ─── Sprint 类型 ─────────────────────────────────────────────────────
+# feature(默认): 包含 worktree，全流程任务
+# deploy:        不创 worktree；仅 promote-prep + build-image + promote-test + integration（+ release 链可选）
+# 由 sprint 计划文档头部 `sprint_type:` 字段声明

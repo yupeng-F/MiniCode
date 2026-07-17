@@ -1,0 +1,99 @@
+# H-22: PR 合规检查 — PR 标题和描述格式校验
+# Harness Engineering: Conventional Commits 格式强制执行。
+#
+# 检查项:
+#   1. PR 标题符合 Conventional Commits 格式
+#   2. PR 描述包含必要章节（变更摘要、关联 Story、测试结果）
+
+name: PR Lint
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-lint:
+    name: PR Format Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Check PR title (Conventional Commits)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Conventional Commits 格式: type(scope): description
+          # type: feat|fix|refactor|chore|docs|test|perf|ci|build|style|revert
+          PATTERN='^(feat|fix|refactor|chore|docs|test|perf|ci|build|style|revert)(\(.+\))?: .{3,}'
+
+          echo "PR 标题: $PR_TITLE"
+
+          if echo "$PR_TITLE" | grep -qE "$PATTERN"; then
+            echo "✅ PR 标题符合 Conventional Commits 格式"
+          else
+            echo "❌ PR 标题不符合 Conventional Commits 格式"
+            echo ""
+            echo "正确格式: type(scope): description"
+            echo "  type 可选: feat|fix|refactor|chore|docs|test|perf|ci|build|style|revert"
+            echo "  scope 可选: 模块名"
+            echo "  description: ≥3 字符"
+            echo ""
+            echo "示例:"
+            echo "  feat(auth): 实现用户登录"
+            echo "  fix: 修复首页加载超时"
+            echo "  refactor(api): 统一错误响应格式"
+            exit 1
+          fi
+
+      - name: Check PR description sections
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ -z "$PR_BODY" ]; then
+            echo "❌ PR 描述为空"
+            echo "请包含: 变更摘要、关联 User Story、测试结果"
+            exit 1
+          fi
+
+          MISSING=()
+
+          # 检查变更摘要 (## 变更 / ## Changes / ## Summary / ## 摘要)
+          if ! echo "$PR_BODY" | grep -qiE '(## (变更|changes|summary|摘要|概述))'; then
+            MISSING+=("变更摘要 (## 变更)")
+          fi
+
+          # 检查关联 Story (Story / User Story / 用户故事 / US- / #)
+          if ! echo "$PR_BODY" | grep -qiE '(story|用户故事|US-|关联|closes #|fixes #|resolves #)'; then
+            MISSING+=("关联 User Story")
+          fi
+
+          # 检查测试结果 (## 测试 / ## Test / 覆盖率 / coverage)
+          if ! echo "$PR_BODY" | grep -qiE '(## (测试|test)|覆盖率|coverage|测试结果)'; then
+            MISSING+=("测试结果 (## 测试)")
+          fi
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "⚠️  PR 描述缺少以下章节:"
+            for section in "${MISSING[@]}"; do
+              echo "  • $section"
+            done
+            echo ""
+            echo "建议 PR 描述模板:"
+            echo "  ## 变更"
+            echo "  简述本 PR 的变更内容"
+            echo "  ## 关联"
+            echo "  - User Story: US-xxx"
+            echo "  ## 测试"
+            echo "  - 覆盖率: xx%"
+            echo "  - E2E: x 个场景通过"
+            # 缺少章节只警告，不阻断
+            echo ""
+            echo "⚠️  以上为建议，不阻断合并"
+          else
+            echo "✅ PR 描述格式完整"
+          fi

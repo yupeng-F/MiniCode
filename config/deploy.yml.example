@@ -1,0 +1,71 @@
+# Harness Engineering — 部署配置（CICD 真源）
+#
+# 本文件合并自 v1.5 时代的 config/environments.yml + config/build-targets.yml
+# 用法：cp config/deploy.yml.example config/deploy.yml 后按项目实际填写
+#
+# ⚠️ 不要把真实密钥提交到仓库（参见 docs/SECRETS.md）。本文件仅声明拓扑、项目额外
+#    secret 名字、构建目标。运行时唯一真源是 .harness/secrets/<env>.sh；deploy /
+#    env-check / promote-prep 都直接读取该 shell 文件。
+#
+# Schema 校验：scripts/env-check.mjs validate
+# Runtime 校验：scripts/env-check.mjs validate --mode runtime --env test
+# 加载：scripts/lib/deploy-config.mjs#loadDeployConfig()
+
+version: 1
+
+# ─── 全局策略 ──────────────────────────────────────────────────────────────
+promote_strategy: manual         # manual | train
+train_schedule: "0 17 * * 1-5"   # 仅 promote_strategy=train 时生效（UTC）
+
+# ─── 镜像构建（合并自旧 build-targets.yml） ───────────────────────────────
+build:
+  image_repo: <your-app>            # env REGISTRY > 本字段 > package.json#name
+  default_platform: linux/amd64     # env HARNESS_BUILD_PLATFORM 可覆盖
+  artifact_dir: .harness/images     # env HARNESS_ARTIFACT_DIR 可覆盖
+  targets:
+    app:
+      dockerfile: Dockerfile
+      context: .
+    # web:
+    #   dockerfile: web/Dockerfile
+    #   context: .
+
+# ─── 环境拓扑（合并自旧 environments.yml） ────────────────────────────────
+environments:
+  test:
+    enabled: false
+    # deploy_mode 决定 promote-prep 生成何种部署产物。
+    # 默认继承 config/harness.yml.deploy.test_mode；可在此显式覆盖。
+    # docker = docker compose；cloud-native = k8s/helm（保留接口，本版本未实现）
+    deploy_mode: docker
+    deploy_target: "ssh://deploy@test.example.com"
+    remote_workdir: "/opt/app/test"
+    compose_file: "deploy/test/docker-compose.yml"
+    remote_compose_file: "deploy/test/docker-compose.yml"
+    remote_runtime_env_file: "deploy/test/runtime.env"
+    health_url: "https://test.example.com/health"
+    smoke_cmd: "pnpm test:smoke --base=$URL"
+    secrets_source: ".harness/secrets/test.sh"
+    # 框架基础设施 deploy secret 由 scripts/lib/required-secrets.mjs 内置。
+    # 业务运行时配置默认来自项目本地 env 文件（如 src/.env）；extra_required_secrets
+    # 仅在项目确实存在“额外 deploy 期 env 前缀变量”时追加。
+    extra_required_secrets: []
+
+  prod:
+    enabled: false
+    deploy_mode: docker
+    deploy_target: "ssh://deploy@prod.example.com"
+    remote_workdir: "/opt/app/prod"
+    compose_file: "deploy/prod/docker-compose.yml"
+    remote_compose_file: "deploy/prod/docker-compose.yml"
+    remote_runtime_env_file: "deploy/prod/runtime.env"
+    health_url: "https://app.example.com/health"
+    smoke_cmd: "pnpm test:smoke --base=$URL --prod"
+    secrets_source: ".harness/secrets/prod.sh"
+    extra_required_secrets: []
+    health_window_minutes: 30
+    rollback_strategy: image-revert
+    rollback_thresholds:
+      error_rate_5xx: 0.01
+      p95_latency_ms: 500
+      cpu_saturation: 0.85

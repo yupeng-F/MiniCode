@@ -1,0 +1,737 @@
+version: "1.6"
+sprint_preflight:
+  command: pnpm typecheck
+  ttl_seconds: 1800
+  on_failure: 展示失败证据并停止任务，修复后重新执行
+tasks:
+  infra:
+    label: 环境搭建
+    spec: ARCHITECTURE.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - sub-agent
+      deny:
+        - modify-specs
+    prerequisites: []
+    outputs:
+      path: 项目根目录
+      artifacts:
+        - 项目骨架
+        - CI/CD 配置
+        - Docker 配置
+    acceptance:
+      - pnpm build 通过
+      - pnpm typecheck && pnpm lint 通过
+  product:
+    label: 产品设计
+    spec: PRODUCT_SENSE.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - explore
+      deny:
+        - bash
+        - modify-code
+    prerequisites:
+      - USER_STORIES.md 中有对应 Story
+    outputs:
+      path: docs/product-specs/
+      artifacts:
+        - PRD 文档
+      index: docs/product-specs/index.md
+    acceptance:
+      - PRD 三级自检通过
+      - JTBD 对照表已填
+      - 价值闭环标注完整
+  design:
+    label: UI 设计
+    spec: DESIGN.md
+    specs:
+      - DESIGN.md
+      - MINICODE_FRONTEND.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - explore
+        - frontend-design
+        - canvas-design
+      deny:
+        - bash
+        - modify-code
+    prerequisites:
+      - product 任务完成
+    outputs:
+      path: docs/design-docs/
+      artifacts:
+        - 设计文档
+        - HTML 原型或 PNG 设计稿
+      index: docs/design-docs/index.md
+    acceptance:
+      - 设计符合 MiniCode React 界面与现有视觉语言
+      - 主路径、异常路径、加载状态和审批状态完整
+      - 设计结果可以通过 Web 测试或后续 Playwright 场景验证
+  backend-design:
+    label: 后端技术方案
+    spec: MINICODE_BACKEND.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - explore
+      deny:
+        - bash
+        - modify-code
+    prerequisites:
+      - design 完成
+    outputs:
+      path: docs/tech-docs/
+      artifacts:
+        - 后端技术方案
+      index: docs/tech-docs/index.md
+    acceptance:
+      - 后端方案符合 FastAPI、Pydantic 与 SQLite 项目约束
+      - 工具副作用必须经过 MiniCode Harness Runtime
+      - 接口、持久化和错误路径均有可验证设计
+  frontend-design:
+    label: 前端技术方案
+    spec: MINICODE_FRONTEND.md
+    specs:
+      - MINICODE_FRONTEND.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - explore
+        - chrome-devtools
+        - webapp-testing
+      deny:
+        - bash
+        - modify-code
+    prerequisites:
+      - design 完成
+    outputs:
+      path: docs/tech-docs/
+      artifacts:
+        - 前端技术方案
+      index: docs/tech-docs/index.md
+    acceptance:
+      - 前端方案使用 React、TypeScript 与 Vite
+      - API 调用集中在 web/src/api.ts
+      - 可访问性、错误状态和构建验证完整
+  code:
+    label: 代码生成
+    spec-backend: MINICODE_BACKEND.md
+    spec-frontend: MINICODE_FRONTEND.md
+    specs-frontend:
+      - MINICODE_FRONTEND.md
+    review_spec: CODE_REVIEW.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - sub-agent
+        - chrome-devtools
+        - webapp-testing
+      deny:
+        - modify-specs
+    prerequisites:
+      - backend-design 或 frontend-design 完成
+    infra_ready: pnpm typecheck
+    outputs:
+      path: src/ 或 web/src/ 或 e2e/scenarios/
+      artifacts:
+        - 可运行代码
+        - 单元测试
+        - E2E 场景用例
+        - 评审报告
+    acceptance:
+      - pnpm typecheck、pnpm lint、pnpm test 全部通过
+      - MiniCode Runtime 安全不变式未被绕过
+      - 新增或变更行为有自动化测试
+  test-case-gen:
+    label: 测试用例生成
+    spec: MINICODE_TESTING.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - explore
+      deny:
+        - bash
+        - modify-code
+    prerequisites:
+      - code 任务 Step 3 REVIEW 通过
+    outputs:
+      path: test-cases/
+      artifacts:
+        - 测试用例 YAML（扁平化存放）
+        - E2E 场景实现
+        - 用例索引
+      index: test-cases/index.md
+    acceptance:
+      - 每条 PRD 用户旅程至少 1 个 P0 用例
+      - 用例结构符合 TEST_CASES.md 模板
+      - 每个 .yml 用例有对应的 e2e/scenarios/*.spec.ts
+      - 新增/修改用例必须填写 introduced_in、last_modified_in、last_verified_in
+      - "涉及第三方/外部服务/媒体持久化的用户可见链路，用例集中至少 1 条声明 execution.mode: live"
+      - index.md 已更新
+    completion_checks:
+      - node scripts/test-case-validator.mjs --sprint <N-name> --ci
+  quality:
+    label: 测试质量评分
+    spec: MINICODE_TESTING.md
+    entry_command: pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:e2e
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - sub-agent
+        - chrome-devtools
+        - webapp-testing
+      deny:
+        - modify-specs
+    prerequisites:
+      - test-case-gen 完成
+      - 测试基础设施存在
+    infra_ready: pnpm typecheck
+    outputs:
+      path: docs/test-reports/
+      artifacts:
+        - 测试报告
+        - 质量评分
+      index: docs/test-reports/index.md
+    acceptance:
+      - entry_command 退出码为 0
+      - Python、Web、构建和离线冒烟证据完整
+      - 质量报告记录每条命令的真实结果
+    completion_checks:
+      - test -f docs/test-reports/<N-name>-quality.md
+  pr:
+    label: 合并请求
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - sub-agent
+      deny:
+        - modify-specs
+        - modify-code
+    prerequisites:
+      - product-acceptance L3 通过（ask_user 确认记录）
+    approval_artifact: docs/acceptance-reports/<N-name>-boss-signoff.yml
+    artifact_guard: node scripts/acceptance-record.mjs lint <N-name>
+      --require-signoff --require-approved
+    outputs:
+      path: PR URL
+      artifacts:
+        - PR 已创建
+        - 全量检查通过
+    acceptance:
+      - PR/MR 通过 scripts/pr-adapter.mjs 创建，不直接调用 gh/glab；GitLab 为权威 CI 时，MR 由
+        GitLab 流水线和保护分支规则决定能否合并
+      - development 模式：PR/MR 从 sprint/N-xxx 到 develop
+      - test 模式（config/harness.yml walkthrough_env=test）：PR/MR 从 sprint/N-xxx 到
+        develop，且已走查 commit_sha 也必须通过 MR 抵达 test
+      - PR 标题符合 Conventional Commits
+      - PR 描述包含：变更摘要、关联 User Story、测试结果、截图（前端）
+      - 全量检查通过（pnpm typecheck && pnpm lint && pnpm test && pnpm build）
+    manual_steps:
+      - Agent 使用 scripts/pr-adapter.mjs create 构造 PR/MR；GitLab push-options
+        fallback 只能由 pr-adapter 内部封装，不得在任务中绕过适配器
+      - 缺少 GitLab CLI/CI 时，Agent 必须输出 MR URL + 本地全量检查证据，等待用户在 GitLab 手动确认
+      - MR 合并后用户通过 ask_user 确认
+    post_merge:
+      - 走查偏差记录至 tech-debt-tracker.md（若有）
+    note: 每个 Sprint 必须包含一个 pr 任务。Sprint = PR 级别交付单元。pr 在 product-acceptance 之后执行。
+  product-acceptance:
+    label: 产品走查
+    spec: PRODUCT_ACCEPTANCE.md
+    gate: L3
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - chrome-devtools
+        - webapp-testing
+      deny:
+        - modify-code
+        - modify-specs
+    prerequisites:
+      - quality 通过（阈值由 config/harness.yml gates.quality_threshold 决定，默认 95）
+      - PRD + 设计文档存在
+    infra_ready: node scripts/verify.mjs preflight
+    outputs:
+      path: docs/acceptance-reports/
+      artifacts:
+        - 走查报告
+        - 走查指南
+      index: docs/acceptance-reports/index.md
+    readiness:
+      quality_report:
+        path: docs/test-reports/<N-name>-quality.md
+        markers:
+          - "当前迭代: ✅ 通过"
+          - "P0 回归: ✅ 通过"
+    acceptance:
+      - 4 维走查覆盖完整
+      - 走查准备以质量报告为前提：当前迭代 E2E 通过 + P0 回归通过 + 真实链路通过（若存在）
+      - 产品主张目标 ≥ 4/5
+      - 走查指南已生成（<N-name>-walkthrough.md），含环境信息 + 设计对照 + 逐步操作 + 预期结果 + 截图占位
+      - 走查指南内嵌每页 prototype-vs-live 截图并排对比（来源 coverage/ui-audit/<sprint>/*.png）
+      - 走查指南含版式整洁度检查（对齐/分组/主次/密度）
+      - 涉及头像/图片/上传时，走查指南含 上传成功 → 跨页回显 → 刷新后持久化
+      - "存在 execution.mode: live 用例时，走查指南引用最新 live smoke 证据"
+      - 走查报告已生成（<N-name>-acceptance.md），用于记录 Boss 实际结果与结论
+      - Boss signoff 已生成（<N-name>-boss-signoff.yml），decision=approved 且
+        commit_sha 指向当前交付提交
+    blocking: product-acceptance Review PASS 后 → 编排者使用 ask_user 阻塞等待 Boss 确认，并执行
+      node scripts/acceptance-record.mjs approve|reject <N-name> 固化结果
+  sprint-close:
+    label: Sprint 清理
+    spec: SPRINT.md
+    gate: L1
+    executor: orchestrator
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-specs
+        - modify-code
+    prerequisites:
+      - product-acceptance L3 通过（ask_user 确认记录）
+      - PR 已合并
+    approval_artifact: docs/acceptance-reports/<N-name>-boss-signoff.yml
+    preflight_file_checks:
+      - docs/acceptance-reports/<N-name>-acceptance.md 必须存在
+      - docs/acceptance-reports/<N-name>-walkthrough.md 必须存在
+    artifact_guard: node scripts/acceptance-record.mjs lint <N-name>
+      --require-signoff --require-approved
+    steps:
+      - 销毁 worktree：node scripts/worktree.mjs destroy <N-name>
+      - 归档计划：exec-plans/active/ → exec-plans/completed/
+      - 更新 AGENTS.md 当前迭代指针
+      - 更新 USER_STORIES.md 已交付 Story 状态
+    acceptance:
+      - worktree 已销毁
+      - 计划文件在 exec-plans/completed/
+      - AGENTS.md 迭代指针已更新
+      - development 模式：signoff commit_sha 已抵达 origin/develop；test 模式：signoff
+        commit_sha 已同时抵达 origin/develop 与 origin/test
+  observe:
+    label: 线上观测
+    spec: OBSERVABILITY.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - sub-agent
+      deny:
+        - modify-code
+        - modify-specs
+    prerequisites:
+      - prod-deploy 完成
+      - 监控就绪
+    outputs:
+      path: docs/observability-reports/
+      artifacts:
+        - 观测报告
+      index: docs/observability-reports/index.md
+    acceptance:
+      - 5 维全部达标
+      - P99 < 8s
+      - 无 Critical 告警
+  promote-prep:
+    label: 部署前置检查（test|prod）
+    spec: CICD.md / config/deploy.yml
+    gate: L1
+    executor: orchestrator
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-specs
+        - modify-code
+    prerequisites:
+      - config/deploy.yml 存在（或旧 environments.yml 可被 deploy-config loader 兼容读取）
+    prerequisites_any:
+      - - test-case-gen
+        - sprint-close
+    steps:
+      - node scripts/promote-prep.mjs <env>
+    acceptance:
+      - .harness/state/promote-prep-<env>.json 写入 ready=true
+      - deploy/<env>/docker-compose.yml 存在（docker 模式）或 cloud-native 占位被显式拒绝
+      - required_secrets 全部声明，runtime 模板齐备
+  build-image:
+    label: 镜像构建（部署 Sprint）
+    spec: CICD.md / config/deploy.yml.build
+    gate: L1
+    executor: orchestrator
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-specs
+        - modify-code
+    prerequisites:
+      - promote-prep 通过（.harness/state/promote-prep-*.json ready=true）
+    steps:
+      - node scripts/build-image.mjs --sprint <N-name> [--target <name>|all]
+    acceptance:
+      - .harness/images/sprint-<N-name-without-prefix>-<sha>* 产物存在
+      - .harness/state/build-image-<N-name>.json success=true
+  promote-test:
+    label: 提升至 Test 环境
+    spec: CICD.md
+    gate: L1
+    executor: orchestrator
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-specs
+        - modify-code
+    prerequisites:
+      - promote-prep test 通过
+      - build-image 完成
+    infra_ready: node scripts/env-check.mjs check test
+    steps:
+      - node scripts/promote.mjs test [--sprints id-list] [--train]
+    acceptance:
+      - promote/* PR 已创建
+      - L2 quality + integration 通过
+      - test 环境 deploy 健康检查通过
+      - .harness/state/promotion-log.yml 已写入记录
+  integration:
+    label: 集成测试（L2）
+    spec: CICD.md 三层测试矩阵
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - webapp-testing
+      deny:
+        - modify-specs
+    prerequisites:
+      - promote-test 已创建 PR
+    infra_ready: node scripts/env-check.mjs check test
+    outputs:
+      path: test-reports/integration/
+    acceptance:
+      - 跨服务集成用例通过
+      - migration dry-run 通过：node scripts/migration-check.mjs all <release-dir>
+  release-prep:
+    label: Release 资产准备
+    spec: CICD.md
+    gate: L1
+    executor: orchestrator
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - sub-agent
+      deny:
+        - modify-specs
+        - modify-code
+    prerequisites:
+      - 纳入 release 的 sprint 全部 product-acceptance 通过
+    infra_ready: node scripts/branch-env-check.mjs --env test
+    steps:
+      - node scripts/release.mjs init <vX.Y.Z> --sprints s1,s2
+      - node scripts/release.mjs scaffold <vX.Y.Z>
+      - node scripts/release.mjs aggregate-quality <vX.Y.Z>
+    outputs:
+      path: deploy/release/<vX.Y.Z>/
+      artifacts:
+        - release-notes.md
+        - migrations/manifest.yml
+        - deploy/
+        - quality-summary.json
+    acceptance:
+      - release-notes.md 八章节齐全（templates/release-notes.md）
+      - migrations 校验：node scripts/migration-check.mjs all
+        deploy/release/<v>/migrations
+      - observability 校验：node scripts/observability-check.mjs validate
+      - node scripts/release.mjs pr <vX.Y.Z> 创建 release/* → main 的 PR
+  migration-design:
+    label: 数据迁移设计
+    spec: MIGRATION.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-specs
+        - run-migration-on-prod
+    prerequisites:
+      - 技术方案明确数据模型变更
+    infra_ready: test -d deploy/release || mkdir -p deploy/release
+    outputs:
+      path: deploy/release/<vX.Y.Z>/migrations/
+      artifacts:
+        - NNN-slug.up.sql
+        - NNN-slug.down.sql
+        - manifest.yml
+    acceptance:
+      - node scripts/migration-check.mjs pair <dir> 通过
+      - node scripts/migration-check.mjs name <dir> 通过
+      - node scripts/migration-check.mjs dry-down <dir> 通过
+      - node scripts/migration-check.mjs idempotency <dir> 通过
+  regression:
+    label: 全量回归 + 性能（L3）
+    spec: CICD.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+        - webapp-testing
+      deny:
+        - modify-specs
+    prerequisites:
+      - release-prep 完成
+      - release/* PR 已创建
+    infra_ready: node scripts/env-check.mjs check test
+    outputs:
+      path: test-reports/regression/
+    acceptance:
+      - 全量回归通过
+      - 性能压测通过（项目阈值）
+      - migration rehearse 通过：node scripts/migration-check.mjs rehearse
+  release-approval:
+    label: Release 上线许可（L3）
+    spec: CICD.md
+    gate: L3
+    executor: orchestrator
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-specs
+        - modify-code
+    prerequisites:
+      - regression 通过
+      - release-notes.md / quality-summary.json 完整
+    infra_ready: test -f deploy/release/*/release-notes.md
+    blocking: Boss 走查 release-notes 后通过 ask_user 阻塞确认；通过则执行 release.mjs approve 写
+      deploy/release/<v>/approval.yml，再 pr-adapter merge release/* → main
+    steps:
+      - node scripts/release.mjs approve <vX.Y.Z> --by Boss --summary <一句话>
+    acceptance:
+      - "deploy/release/<v>/approval.yml: decision=approved 已写入"
+      - release/* → main PR 已合并
+  prod-deploy:
+    label: 生产部署
+    spec: CICD.md
+    gate: L1
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-code-on-production
+        - modify-specs
+    prerequisites:
+      - release-approval 通过
+      - main 已合并
+    infra_ready: node scripts/env-check.mjs check prod
+    steps:
+      - node scripts/deploy.mjs preflight-secrets --env prod
+      - node scripts/image-promote.mjs --from test-<sha> --to prod-<sha>
+      - node scripts/deploy.mjs --env prod --tag prod-<sha>
+      - node scripts/deploy.mjs watch --env prod --window 30m
+      - node scripts/back-merge.mjs --from main --to test,develop --reason
+        release
+    acceptance:
+      - 健康窗口（30 min）通过
+      - back-merge PR 已创建
+      - 无回滚
+  hotfix-init:
+    label: Hotfix 初始化
+    spec: CICD.md
+    gate: L1
+    executor: orchestrator
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-specs
+    prerequisites:
+      - 生产严重事故（P0/P1）
+    infra_ready: git fetch origin main --tags --no-tags
+    steps:
+      - node scripts/hotfix.mjs init <issue-id> --severity p0|p1
+    outputs:
+      path: sprints/hotfix-<issue-id>/PLAN.md
+    acceptance:
+      - hotfix/<issue-id> 分支已基于最近 prod tag 创建
+      - 计划模板含现象/根因/修复/验证/部署/回灌六章节
+  back-merge:
+    label: 回灌主线
+    spec: CICD.md
+    gate: L1
+    executor: orchestrator
+    tools:
+      allow:
+        - file-rw
+        - search
+        - bash
+      deny:
+        - modify-specs
+        - modify-code
+    prerequisites:
+      - main 完成 release 或 hotfix 部署
+    infra_ready: git fetch origin main test develop --no-tags
+    steps:
+      - node scripts/back-merge.mjs --from main --to test,develop --reason
+        <release|hotfix-id>
+    acceptance:
+      - back-merge PR 已自动创建
+      - 无未解决冲突（冲突时停在 back-merge/* 分支由人工接手）
+gates:
+  L1:
+    label: 仅通知
+    action: AI 完成后通知用户，无需等待确认，自动继续下一任务
+  L3:
+    label: 必须审批
+    action: AI 完成任务（Step 1→2→3）后，必须使用 ask_user 工具阻塞等待用户明确确认（通过/approved/继续）
+    enforcement: 编排者必须调用 ask_user 工具，禁止仅输出文字后自行继续
+    constraint: 禁止同一轮对话跨越 L3 阻断点。没有反馈 = 未通过。
+    preflight_check: 下游任务 Pre-Flight 必须验证 L3 产出物文件存在，文件不存在 = 未执行 = hard stop
+spawn_rules:
+  - from: product
+    to:
+      - design
+      - backend-design
+      - frontend-design
+    condition: PRD 涉及 UI 或新增接口
+  - from: design
+    to:
+      - frontend-design
+    condition: design 完成
+  - from:
+      - backend-design
+      - frontend-design
+    to:
+      - code
+    condition: 方案完成
+  - from: code
+    to:
+      - test-case-gen
+    condition: Step 3 REVIEW 通过
+  - from: test-case-gen
+    to:
+      - quality
+    condition: harness.yml.walkthrough_env=development：测试用例生成完成后直接 quality
+  - from: test-case-gen
+    to:
+      - promote-prep
+    condition: harness.yml.walkthrough_env=test：先部署 Test 环境，再执行 quality /
+      product-acceptance
+  - from: promote-test
+    to:
+      - quality
+    condition: harness.yml.walkthrough_env=test：Test 环境健康后执行 quality
+  - from: quality
+    to:
+      - product-acceptance
+    condition: 达标（≥ 阈值，由 harness.yml.gates.quality_threshold 决定）→ product-acceptance
+  - from: product-acceptance
+    to:
+      - code
+      - pr
+    condition: 偏差→code 修复；通过→pr 创建合并请求
+  - from: pr
+    to:
+      - sprint-close
+    condition: PR 已合并
+  - from: sprint-close
+    to: []
+    condition: Sprint 闭环结束（生产/测试发布作为独立 deploy-sprint）
+  - from: sprint-close
+    to:
+      - promote-prep
+    condition: 显式启动独立 deploy-sprint（test 或 prod）；不创建 worktree
+  - from: promote-prep
+    to:
+      - build-image
+    condition: .harness/state/promote-prep-<env>.json ready=true
+  - from: build-image
+    to:
+      - promote-test
+    condition: .harness/state/build-image-<N-name>.json success=true（test 链路）
+  - from: promote-test
+    to:
+      - integration
+    condition: promote/* PR 创建后
+  - from: integration
+    to:
+      - release-prep
+    condition: 若 deploy-sprint 目标=prod，则进入 release 链路；否则 deploy-sprint 结束
+  - from: release-prep
+    to:
+      - migration-design
+      - regression
+    condition: 并行：迁移设计 + 全量回归
+  - from:
+      - migration-design
+      - regression
+    to:
+      - release-approval
+    condition: 两者均通过
+  - from: release-approval
+    to:
+      - prod-deploy
+    condition: Boss approve
+  - from: prod-deploy
+    to:
+      - back-merge
+      - observe
+    condition: 健康窗口通过
+  - from: hotfix-init
+    to:
+      - code
+    condition: 在 hotfix/<issue-id> worktree 内继续 sprint 任务流
+  - from: code
+    to:
+      - back-merge
+    condition: hotfix 已合并 main 且部署成功

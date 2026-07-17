@@ -98,3 +98,70 @@ src/minicode/
 ## 8. 当前状态
 
 旧的 `multi_agents` LangGraph 原型及重复设计文档已删除。当前实现以 `src/minicode/` 为准，架构以 `docs/01_项目目标与架构设计.md` 为准，进度以 `docs/superpowers/plans/2026-07-15-minicode-productization.md` 顶部状态表为准。
+
+<!-- harness:framework-map:start （由 scripts/agents-sync.mjs 维护，请勿手工编辑） -->
+
+## 快速命令
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm dev` / `pnpm build` / `pnpm test` / `pnpm lint` | 项目自定义脚本 |
+| `node scripts/verify.mjs` | 端到端验证（health + 截图 + 日志 + 指标） |
+| `node scripts/doc-lint.mjs` | 文档健康（链接 + 索引 + 新鲜度） |
+| `node scripts/doc-garden.mjs` | 手动文档园艺（简明度 + 专业度 + 索引摘要） |
+| `node scripts/worktree.mjs create <id>` | 创建隔离工作空间 |
+| `node scripts/sprint-gate.mjs <task-id>` | 任务前置条件校验 |
+| `node scripts/quality-score.mjs --sprint <id> --level L1` | 质量评分 |
+| `node scripts/promote.mjs test` | Develop → Test 提升 |
+| `node scripts/release.mjs init <vX.Y.Z>` | 创建 release 分支 |
+| `node scripts/deploy.mjs --env <test\|prod>` | 部署 |
+| `node scripts/lock.mjs check <env>` | 环境锁状态 |
+| `node scripts/env-check.mjs validate` | 环境登记 schema 校验 |
+
+## 文档导航
+
+> Agent 按任务类型渐进式加载文档：先查索引，再只读取与当前需求强相关的正文，不要一次性全部读取。
+
+| 我要做什么 | 先读 | 再读 |
+|-----------|------|------|
+| 规划迭代 / 拆分任务 | `docs/SPRINT.md` | `USER_STORIES.md` |
+| 产品设计 / PRD | `docs/PRODUCT_SENSE.md` | `USER_STORIES.md` |
+| UI 设计 | `docs/DESIGN.md` | `docs/UI_DESIGN_SYSTEM.md` + 关联 PRD |
+| 后端技术方案 | `docs/TECH_BACKEND.md` | `ARCHITECTURE.md` |
+| 前端技术方案 | `docs/TECH_FRONTEND.md` | `docs/UI_DESIGN_SYSTEM.md` + `ARCHITECTURE.md` |
+| 后端编码 | `docs/CODING_BACKEND.md` | `PROJECT_RULES.md` + 技术方案 |
+| 前端编码 | `docs/CODING_FRONTEND.md` | `docs/UI_DESIGN_SYSTEM.md` + `PROJECT_RULES.md` + 技术方案 |
+| 代码评审 | `docs/CODE_REVIEW.md` | `PROJECT_RULES.md` |
+| 测试质量评分 | `docs/QUALITY_SCORE.md` | `PROJECT_RULES.md` |
+| 产品走查 | `docs/PRODUCT_ACCEPTANCE.md` | PRD + 设计文档 |
+| **Sprint / deploy-sprint 流程** | **`docs/SPRINT.md`** | `lint/task-rules.yml` + `config/harness.yml` |
+| **CI/CD 红线 / 分支模型** | **`docs/CICD.md`** | `config/deploy.yml` |
+| deploy-sprint（test/prod） | `docs/SPRINT.md` | `docs/RELEASE.md` + `config/deploy.yml` |
+| 数据库迁移 | `docs/MIGRATION.md` | `templates/migration/` |
+| Secrets 管理 | `docs/SECRETS.md` | `config/deploy.yml` |
+| 线上观测 | `docs/OBSERVABILITY.md` | `templates/observability/` |
+
+## 知识库索引
+
+```
+docs/
+├── product-specs/          # PRD（含 index.md 验证状态）
+├── design-docs/            # UI 设计 + prototypes/
+├── tech-docs/              # 技术方案
+├── exec-plans/             # 迭代计划（active / completed）
+├── review-reports/         # 评审
+├── test-reports/           # 测试
+├── acceptance-reports/     # 产品走查
+├── observability-reports/  # 线上观测
+├── bugs/                   # Bug 跟踪
+└── references/             # 参考资料
+
+config/harness.yml          # Harness 项目级行为配置（走查环境、质量阈值、部署模式）
+config/deploy.yml           # 发布环境与部署配置
+.harness/state/             # 环境锁、promotion 日志、框架运行状态
+deploy/                     # test/prod 部署生成产物
+templates/migration/        # DB migration 模板（脚本 readFileSync）
+templates/observability/    # PromQL / LogQL 可执行查询
+```
+
+<!-- harness:framework-map:end -->

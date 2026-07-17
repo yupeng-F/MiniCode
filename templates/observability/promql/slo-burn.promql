@@ -1,0 +1,6 @@
+# 28 天 SLO 烧毁率（目标 99.5%；burn rate > 14.4 触发告警）
+1 - (
+  sum_over_time(slo:availability:ratio[28d])
+    /
+  count_over_time(slo:availability:ratio[28d])
+) > (1 - 0.995) * 14.4

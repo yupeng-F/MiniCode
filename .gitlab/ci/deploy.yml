@@ -1,0 +1,182 @@
+# Sprint 11 — GitLab CI: staging + production stages (6 jobs)
+# 设计依据：sprint-11-gitlab-ci-design.md §3.1 #5 (deploy-test), #8 (5 prod-*) / §4.5 / §6.2 / §6.3
+# 上游 GH 来源：.github/workflows/staging.yml (deploy-test) / production.yml (5 prod-*)
+#
+# 本文件 job：
+#   - deploy-test（push test；environment.name=test；needs.artifacts:true 跨 pipeline 拉 build/promote tar）
+#   - prod-validate / prod-promote-image / prod-deploy / prod-watch / prod-back-merge（5 manual prod-*）
+#
+# environment.name 映射（design §6.2）：
+#   deploy-test → test
+#   prod-* (5 个) → prod
+#   仅 prod-deploy 设 environment.action: start 与 environment.url
+#
+# SSH 消费（design §6.3）：File 类型变量 = 临时落盘 path；用 chmod 600 "$VAR" 后 -i "$VAR"
+# 严禁 dependencies: 旧语法（design §4.5）；跨 pipeline artifact 必须 needs[*].artifacts: true
+
+deploy-test:
+  stage: staging
+  extends: .docker-dind
+  environment:
+    name: test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "test"'
+  needs:
+    - job: build-image
+      artifacts: true
+      optional: true
+    - job: promote-test
+      artifacts: true
+      optional: true
+  variables:
+    HARNESS_VERIFY_PROFILE: "test"
+  script:
+    # design §6.3：File 类型 SSH key，$TEST_SSH_PRIVATE_KEY 已是临时落盘 path
+    - chmod 600 "$TEST_SSH_PRIVATE_KEY"
+    - export HARNESS_SSH_KEY_PATH="$TEST_SSH_PRIVATE_KEY"
+    - node scripts/branch-env-check.mjs --env test
+    - node scripts/deploy.mjs preflight-secrets --env test
+    # 解析待部署 dev tag（来自 promote 提交的 squash 标题）
+    - |
+      COMMIT_MESSAGE="$(git log -1 --pretty=%B)"
+      SOURCE_SHA="$(printf '%s\n' "$COMMIT_MESSAGE" | sed -nE 's/^promote\([^)]*\): ([0-9a-f]{7,40}).*/\1/p' | head -n1)"
+      if [ -z "$SOURCE_SHA" ]; then
+        echo "unable to resolve promoted develop sha from test branch commit"
+        exit 1
+      fi
+      echo "SOURCE_SHA=$SOURCE_SHA" >> deploy.env
+    - source deploy.env
+    # retag dev → test，再 deploy（artifact-mode）
+    - node scripts/image-promote.mjs --from-tar "${HARNESS_IMAGE_REPO_API}-dev-${SOURCE_SHA}.tar,${HARNESS_IMAGE_REPO_WEB}-dev-${SOURCE_SHA}.tar" --to "test-${SOURCE_SHA}"
+    - node scripts/deploy.mjs --env test --tag "test-${SOURCE_SHA}" --image-tar "${HARNESS_IMAGE_REPO_API}-test-${SOURCE_SHA}.tar,${HARNESS_IMAGE_REPO_WEB}-test-${SOURCE_SHA}.tar"
+
+# ─── Production 5 jobs（全部 manual + needs 串联，design §6.2）──────────────
+
+prod-validate:
+  stage: production
+  image: alpine:3.19
+  before_script: []
+  environment:
+    name: prod
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: false
+  variables:
+    IMAGE_TAG: ""
+    RELEASE_VERSION: ""
+    CONFIRM: ""
+  script:
+    - 'echo "inputs: IMAGE_TAG=$IMAGE_TAG  RELEASE_VERSION=$RELEASE_VERSION  CONFIRM=$CONFIRM"'
+    - |
+      if [ "$CONFIRM" != "$RELEASE_VERSION" ]; then
+        echo "CONFIRM must equal RELEASE_VERSION"
+        exit 1
+      fi
+      if ! echo "$IMAGE_TAG" | grep -Eq '^test-[A-Za-z0-9._-]+$'; then
+        echo "image-tag must be a tested image in the form test-<sha>"
+        exit 1
+      fi
+      if ! echo "$RELEASE_VERSION" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)?$'; then
+        echo "invalid release-version: $RELEASE_VERSION"
+        exit 1
+      fi
+
+prod-promote-image:
+  stage: production
+  extends: .docker-dind
+  environment:
+    name: prod
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: false
+  needs:
+    - job: prod-validate
+    - job: build-image
+      artifacts: true
+      optional: true
+    - job: promote-test
+      artifacts: true
+      optional: true
+  variables:
+    IMAGE_TAG: ""
+    RELEASE_VERSION: ""
+  script:
+    - 'echo "inputs: IMAGE_TAG=$IMAGE_TAG  RELEASE_VERSION=$RELEASE_VERSION"'
+    - |
+      SOURCE_SHA="$(printf '%s' "$IMAGE_TAG" | sed -E 's/^[^-]+-//')"
+      PROD_TAG="prod-${RELEASE_VERSION}-${SOURCE_SHA}"
+      echo "PROD_TAG=$PROD_TAG" > prod.env
+      echo "SOURCE_SHA=$SOURCE_SHA" >> prod.env
+    - source prod.env
+    - node scripts/image-promote.mjs --from-tar "${HARNESS_IMAGE_REPO_API}-test-${SOURCE_SHA}.tar,${HARNESS_IMAGE_REPO_WEB}-test-${SOURCE_SHA}.tar" --to "$PROD_TAG"
+  artifacts:
+    when: on_success
+    expire_in: 90 days
+    paths:
+      - "${HARNESS_IMAGE_REPO_API}-prod-*.tar"
+      - "${HARNESS_IMAGE_REPO_WEB}-prod-*.tar"
+      - "prod.env"
+
+prod-deploy:
+  stage: production
+  extends: .docker-dind
+  environment:
+    name: prod
+    action: start
+    # T-03 决策：config/deploy.yml prod 块声明了 PROD_API_BASE_URL（API health 探测用）
+    # 但**未**声明 PROD_PUBLIC_BASE_URL（前端公网地址）。为避免引入未知变量导致
+    # GitLab Environment URL 链接断裂，T-03 维持占位由 T-04 替换。
+    # T-04 owner: maintainer 提供生产域名（或在 environments.yml + GitLab Variables
+    # 同步声明 PROD_PUBLIC_BASE_URL）后改为 '$PROD_PUBLIC_BASE_URL'。
+    url: 'https://${HARNESS_PROD_HOST}'
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: false
+  needs:
+    - job: prod-promote-image
+      artifacts: true
+  variables:
+    RELEASE_VERSION: ""
+  script:
+    - 'echo "inputs: RELEASE_VERSION=$RELEASE_VERSION"'
+    - chmod 600 "$PROD_SSH_PRIVATE_KEY"
+    - export HARNESS_SSH_KEY_PATH="$PROD_SSH_PRIVATE_KEY"
+    - source prod.env
+    - node scripts/branch-env-check.mjs --env prod
+    - node scripts/deploy.mjs preflight-secrets --env prod
+    - node scripts/deploy.mjs --env prod --tag "$PROD_TAG" --image-tar "${HARNESS_IMAGE_REPO_API}-prod-${RELEASE_VERSION}-${SOURCE_SHA}.tar,${HARNESS_IMAGE_REPO_WEB}-prod-${RELEASE_VERSION}-${SOURCE_SHA}.tar"
+
+prod-watch:
+  stage: production
+  extends: .node-pnpm
+  environment:
+    name: prod
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+  needs:
+    - job: prod-deploy
+  script:
+    - chmod 600 "$PROD_SSH_PRIVATE_KEY"
+    - export HARNESS_SSH_KEY_PATH="$PROD_SSH_PRIVATE_KEY"
+    - node scripts/deploy.mjs watch --env prod --window 30m
+
+prod-back-merge:
+  stage: production
+  extends: .node-pnpm
+  environment:
+    name: prod
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+  needs:
+    - job: prod-watch
+  script:
+    - git config user.name "harness-back-merge"
+    - git config user.email "harness-back-merge@users.noreply.github.com"
+    - node scripts/back-merge.mjs --from main --to test,develop --reason release

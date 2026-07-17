@@ -1,0 +1,47 @@
+# H-11: Back-Merge — main → test → develop 自动回灌
+# 在 release / hotfix 完成后调用 back-merge.mjs
+
+name: Back-Merge
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: '来源分支'
+        required: true
+        default: main
+      to:
+        description: '目标分支（逗号分隔）'
+        required: true
+        default: 'test,develop'
+      reason:
+        description: '原因'
+        required: false
+        default: 'manual'
+
+env:
+  NODE_VERSION: '20'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  back-merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, token: '${{ secrets.GITHUB_TOKEN }}' }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+
+      - uses: ./.github/actions/setup-harness-scripts
+
+      - run: |
+          git config user.name "harness-back-merge"
+          git config user.email "harness-back-merge@users.noreply.github.com"
+
+      - env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: node scripts/back-merge.mjs --from '${{ inputs.from }}' --to '${{ inputs.to }}' --reason '${{ inputs.reason }}'

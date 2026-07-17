@@ -22,7 +22,7 @@ commands:
       args: [--prefix, web, test]
   build:
     - executable: python
-      args: [-m, build, --wheel]
+      args: [-m, build, --wheel, --no-isolation]
     - executable: npm
       args: [--prefix, web, run, build]
   test:e2e:

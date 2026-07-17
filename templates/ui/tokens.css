@@ -1,0 +1,141 @@
+/* =============================================================================
+ * Harness UI Tokens — Single Source of Truth
+ * 规范见 docs/UI_DESIGN_SYSTEM.md
+ *
+ * 用法：
+ *   1) 应用入口：在 app.css 中 `@import './tokens.css';`，配合 Tailwind v4 `@theme`
+ *      引用同名变量；组件用语义类（bg-primary / text-muted）。
+ *   2) HTML 原型：直接 `<link rel="stylesheet" href="tokens.css">` 或内联本文件。
+ * 禁止：在组件中写 hex / 魔法数字；新增 token 须改本文件 + UI_DESIGN_SYSTEM.md。
+ * ============================================================================= */
+
+:root {
+  /* -------------------- Color · Brand -------------------- */
+  --color-primary:        #2563eb;
+  --color-primary-hover:  #1d4ed8;
+  --color-primary-active: #1e40af;
+  --color-primary-soft:   #dbeafe;
+  --color-on-primary:     #ffffff;
+
+  /* -------------------- Color · Semantic ----------------- */
+  --color-success:        #059669;
+  --color-success-hover:  #047857;
+  --color-success-soft:   #ecfdf5;
+
+  --color-warning:        #d97706;
+  --color-warning-hover:  #b45309;
+  --color-warning-soft:   #fff7ed;
+
+  --color-danger:         #dc2626;
+  --color-danger-hover:   #b91c1c;
+  --color-danger-soft:    #fef2f2;
+
+  --color-info:           #4338ca;
+  --color-info-soft:      #eef2ff;
+
+  /* -------------------- Color · Neutral ------------------ */
+  --color-bg:             #f3f4f6;
+  --color-surface:        #ffffff;
+  --color-surface-soft:   #f9fafb;
+  --color-border:         #e5e7eb;
+  --color-border-strong:  #d1d5db;
+
+  --color-text:           #111827;
+  --color-text-secondary: #374151;
+  --color-text-muted:     #6b7280;
+  --color-text-disabled:  #9ca3af;
+
+  /* -------------------- Typography ----------------------- */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;   /* 12 / 16 */
+  --text-sm:   0.875rem;  /* 14 / 20 */
+  --text-base: 1rem;      /* 16 / 24 */
+  --text-lg:   1.125rem;  /* 18 / 28 */
+  --text-xl:   1.25rem;   /* 20 / 28 */
+  --text-2xl:  1.5rem;    /* 24 / 32 */
+  --text-3xl:  1.875rem;  /* 30 / 36 */
+  --text-4xl:  2.25rem;   /* 36 / 40 */
+
+  --leading-xs:   1rem;
+  --leading-sm:   1.25rem;
+  --leading-base: 1.5rem;
+  --leading-lg:   1.75rem;
+  --leading-xl:   1.75rem;
+  --leading-2xl:  2rem;
+  --leading-3xl:  2.25rem;
+  --leading-4xl:  2.5rem;
+
+  --font-weight-normal:   400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  /* -------------------- Spacing (8px grid) --------------- */
+  --space-0:  0;
+  --space-1:  0.25rem;  /*  4 */
+  --space-2:  0.5rem;   /*  8 */
+  --space-3:  0.75rem;  /* 12 */
+  --space-4:  1rem;     /* 16 */
+  --space-5:  1.25rem;  /* 20 */
+  --space-6:  1.5rem;   /* 24 */
+  --space-8:  2rem;     /* 32 */
+  --space-10: 2.5rem;   /* 40 */
+  --space-12: 3rem;     /* 48 */
+  --space-16: 4rem;     /* 64 */
+
+  /* -------------------- Radius -------------------------- */
+  --radius-sm:   0.25rem;  /* 4 */
+  --radius-md:   0.5rem;   /* 8  — 默认控件 */
+  --radius-lg:   0.75rem;  /* 12 — 卡片 */
+  --radius-xl:   1rem;     /* 16 — 面板/模态 */
+  --radius-2xl:  1.5rem;   /* 24 — 大面板 */
+  --radius-full: 9999px;
+
+  /* -------------------- Shadow -------------------------- */
+  --shadow-sm: 0 1px 2px 0 rgba(17,24,39,0.04), 0 1px 3px 0 rgba(17,24,39,0.06);
+  --shadow-md: 0 4px 6px -1px rgba(17,24,39,0.08), 0 2px 4px -2px rgba(17,24,39,0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(17,24,39,0.10), 0 4px 6px -4px rgba(17,24,39,0.08);
+  --shadow-xl: 0 20px 25px -5px rgba(17,24,39,0.12), 0 8px 10px -6px rgba(17,24,39,0.10);
+
+  /* -------------------- Breakpoints --------------------- */
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+
+  --container-h5:        480px;   /* H5 viewer 最大宽度 */
+  --container-dashboard: 1280px;  /* Dashboard 居中容器 */
+  --container-doc:       1100px;  /* 文档/营销页 */
+
+  /* -------------------- Motion ------------------------- */
+  --motion-fast:     120ms cubic-bezier(0, 0, 0.2, 1);
+  --motion-standard: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-slow:     300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* -------------------- Z-Index ------------------------ */
+  --z-base:     0;
+  --z-sticky:   10;
+  --z-dropdown: 100;
+  --z-overlay:  1000;
+  --z-modal:    1100;
+  --z-toast:    1200;
+}
+
+/* 深色主题（v2 起逐步落地；当前以浅色为基线） */
+[data-theme="dark"] {
+  --color-bg:             #0b1120;
+  --color-surface:        #111827;
+  --color-surface-soft:   #1f2937;
+  --color-border:         #1f2937;
+  --color-border-strong:  #374151;
+  --color-text:           #f9fafb;
+  --color-text-secondary: #e5e7eb;
+  --color-text-muted:     #9ca3af;
+  --color-text-disabled:  #4b5563;
+}
+
+/* RTL 兼容（vue-i18n 多语言项目） */
+html[dir="rtl"] body { direction: rtl; }

@@ -1,0 +1,78 @@
+# walkthrough-checks.yml — 产品走查 4 维结构化检查清单
+# 对应规范：docs/PRODUCT_ACCEPTANCE.md 走查维度章节。
+# 消费者：acceptance-record.mjs（生成指南 / 计分）、harness-review 子 Agent。
+# 修改此文件即修改走查标准，无需改脚本。
+
+version: "1.0"
+
+# 4 维走查 = F (功能) + U (UI) + P (产品主张) + X (体验)
+# 每项：默认严重级别 = critical | major | minor | observation
+# 实际走查结果由 Boss 确定严重级；默认值用于走查指南生成的权重排序。
+
+dimensions:
+  F:
+    label: "PRD 功能符合性"
+    spec: "docs/PRODUCT_ACCEPTANCE.md"
+    checks:
+      - { id: "F-01", title: "主路径完整", criterion: "按 PRD 用户流程逐步执行无阻断", default: major }
+      - { id: "F-02", title: "异常路径覆盖", criterion: "异常态有处理，不白屏不卡死", default: major }
+      - { id: "F-03", title: "字段完整性", criterion: "所有字段存在、类型正确", default: major }
+      - { id: "F-04", title: "状态完备性", criterion: "正常/空态/加载/错误/降级态均有 UI", default: major }
+      - { id: "F-05", title: "默认值策略", criterion: "与 PRD 一致，体现产品策略", default: minor }
+      - { id: "F-06", title: "文案准确性", criterion: "与 PRD 定义一致", default: minor }
+      - { id: "F-07", title: "数据埋点", criterion: "PRD 定义的埋点全部触发", default: minor }
+      - { id: "F-08", title: "非功能要求", criterion: "满足 P50/P95/P99 指标", default: major }
+
+  U:
+    label: "UI 设计符合性"
+    spec: "docs/DESIGN.md"
+    checks:
+      - { id: "U-01", title: "页面流完整", criterion: "所有页面已实现，导航路径与设计一致", default: major }
+      - { id: "U-02", title: "视觉层级", criterion: "信息层级与设计一致", default: minor }
+      - { id: "U-03", title: "布局与间距", criterion: "关键间距偏差 ≤ 4px", default: minor }
+      - { id: "U-04", title: "组件状态", criterion: "default/hover/active/loading/disabled 全覆盖", default: major }
+      - { id: "U-05", title: "响应式", criterion: "375px + 1280px 断点正确", default: major }
+      - { id: "U-06", title: "动效", criterion: "120-300ms，缓动与设计一致", default: minor }
+      - { id: "U-07", title: "Design Token", criterion: "可追溯到 token，无硬编码样式", default: minor }
+      - { id: "U-08", title: "首屏规范", criterion: "1 个主任务 + 1 个主 CTA", default: major }
+
+  P:
+    label: "产品主张符合性"
+    spec: "docs/PRODUCT_SENSE.md"
+    scoring: "每条主张独立评分，≥ 4/5 通过；总体 ≥ 4/5 视为达标"
+    checks:
+      - { id: "P-1", title: "速度是功能", criterion: "P99 < 8s、LCP < 2s、交互反馈 < 100ms、乐观更新", default: major }
+      - { id: "P-2", title: "零摩擦", criterion: "主路径 ≤ N 步、每步 ≤ 1 决策、自动推断、自然语言优先", default: major }
+      - { id: "P-3", title: "默认值即观点", criterion: "有默认选项、服务转化、非中庸值", default: minor }
+      - { id: "P-4", title: "可行动数据", criterion: "行为强度+时间窗口+推荐动作、下一步建议", default: minor }
+      - { id: "P-5", title: "状态即体验", criterion: "空态教育、加载态掌控感、错误态可执行", default: major }
+
+  X:
+    label: "用户体验符合性"
+    spec: "docs/PRODUCT_SENSE.md"
+    checks:
+      - { id: "X-01", title: "S0 标题即价值", criterion: "0-3s 首屏标题传达价值", default: minor }
+      - { id: "X-02", title: "S1 示例可见", criterion: "3-15s 示例输入 + 预期结果可见", default: minor }
+      - { id: "X-03", title: "S2 进度反馈", criterion: "15-60s 进度反馈 + 可撤回", default: minor }
+      - { id: "X-04", title: "S3 阶段化反馈", criterion: "1-3min 阶段化反馈，禁止白屏", default: major }
+      - { id: "X-05", title: "S4 归因证明", criterion: "3min+ 归因证明 + 一键复用", default: observation }
+      - { id: "X-06", title: "犹豫期", criterion: "初次进入有引导，降低决策成本", default: minor }
+      - { id: "X-07", title: "试探期", criterion: "轻量动作可撤回，错误有解法", default: minor }
+      - { id: "X-08", title: "依赖期", criterion: "主动作可复用，路径可记忆", default: observation }
+      - { id: "X-09", title: "挑剔期", criterion: "能响应进阶诉求，避免过度简化", default: observation }
+      - { id: "X-10", title: "30s 理解价值", criterion: "30 秒内用户理解本产品价值", default: minor }
+      - { id: "X-11", title: "3min 首次任务", criterion: "3 分钟内完成首个任务", default: major }
+      - { id: "X-12", title: "5min Aha Moment", criterion: "5 分钟内看到 Aha Moment", default: minor }
+      - { id: "X-13", title: "30min 学会复用", criterion: "30 分钟学会复用路径", default: observation }
+      - { id: "X-14", title: "Microcopy 具体", criterion: "具体 > 通用（禁用\"操作成功\"等泛语）", default: minor }
+      - { id: "X-15", title: "Microcopy 行动", criterion: "行动 > 状态（CTA 使用动词）", default: minor }
+      - { id: "X-16", title: "Microcopy 解释", criterion: "解释 > 报告（错误含解决方案）", default: minor }
+      - { id: "X-17", title: "Microcopy 禁用泛语", criterion: "不出现\"请输入内容/加载中...\"等泛语", default: minor }
+
+# ─── 通过标准 ─────────────────────────────────────────────────────
+# 由 scripts/acceptance-record.mjs score 消费。
+pass_rules:
+  critical_max: 0
+  major_max: 0
+  minor_max: 5
+  product_stance_min: 4  # P 维度均分 ≥ 4/5

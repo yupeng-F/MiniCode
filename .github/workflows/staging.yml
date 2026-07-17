@@ -1,0 +1,134 @@
+# H-05: Test Staging — promote/* -> test 的 L2 + push:test 的 test 部署
+# Harness Engineering CICD.md
+
+name: Test Staging
+
+on:
+  pull_request:
+    branches: [test]
+    types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [test]
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '10.31.0'
+
+permissions:
+  contents: read
+
+jobs:
+  l2-quality:
+    name: L2 Quality
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'promote/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: ./.github/actions/setup-harness-scripts
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check branch mapping
+        run: node scripts/branch-env-check.mjs --env test --branch "${GITHUB_HEAD_REF}"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: L2 quality score
+        run: |
+          SPRINT_ID="${GITHUB_HEAD_REF#promote/}"
+          node scripts/quality-score.mjs --sprint "$SPRINT_ID" --level L2
+
+  integration:
+    name: Integration Schema
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'promote/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HARNESS_VERIFY_PROFILE: test
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+
+      - name: Check branch mapping
+        run: node scripts/branch-env-check.mjs --env test --branch "${GITHUB_HEAD_REF}"
+
+      - name: Check test environment registration
+        run: node scripts/env-check.mjs check test
+
+      - name: Validate test environment schema
+        run: node scripts/env-check.mjs validate --mode schema --env test
+
+      - name: Verify test profile
+        run: node scripts/verify.mjs profile-check
+
+  deploy-test:
+    name: Deploy Test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: test
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+
+      - name: Check branch mapping
+        run: node scripts/branch-env-check.mjs --env test
+
+      - name: Preflight test secrets
+        run: node scripts/deploy.mjs preflight-secrets --env test
+
+      - name: Resolve promoted image tag
+        id: tag
+        run: |
+          COMMIT_MESSAGE="$(git log -1 --pretty=%B)"
+          SOURCE_SHA="$(printf '%s\n' "$COMMIT_MESSAGE" | sed -nE 's/^promote\([^)]*\): ([0-9a-f]{7,40}).*/\1/p' | head -n1)"
+          if [ -z "$SOURCE_SHA" ]; then
+            SOURCE_SHA=$(git rev-parse --short "${GITHUB_SHA}^2" 2>/dev/null || true)
+          fi
+          if [ -z "$SOURCE_SHA" ]; then
+            echo "unable to resolve promoted develop sha from test branch commit"
+            echo "expected squash title: promote(<id>): <sha> or a merge commit with second parent"
+            exit 1
+          fi
+          echo "tag=test-${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy test environment
+        run: node scripts/deploy.mjs --env test --tag "${{ steps.tag.outputs.tag }}"

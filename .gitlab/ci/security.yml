@@ -1,0 +1,31 @@
+# Sprint 12 T-04 P2 — security stage 占位（gitleaks + npm audit）
+# 实际工具实现由 T-05 / Sprint 13 收口。本文件仅定义 job 骨架，避免空 stage。
+# 设计依据：docs/tech-docs/sprint-12-framework-doc-alignment.md §P2
+
+gitleaks-scan:
+  stage: security
+  image: zricethezav/gitleaks:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(main|develop)$/'
+  allow_failure: true
+  script:
+    - 'echo "TODO[T-05]: gitleaks detect --source . --redact --no-git --report-format sarif --report-path gitleaks.sarif || true"'
+  artifacts:
+    when: always
+    paths:
+      - gitleaks.sarif
+    expire_in: 30 days
+
+npm-audit:
+  stage: security
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(main|develop)$/'
+  allow_failure: true
+  script:
+    - 'echo "TODO[T-05]: pnpm audit --prod --audit-level=high --json > npm-audit.json || true"'
+  artifacts:
+    when: always
+    paths:
+      - npm-audit.json
+    expire_in: 30 days

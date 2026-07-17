@@ -1,0 +1,2 @@
+# 按 service 聚合错误日志数
+sum by (service) (count_over_time({level="error"} |~ "stack" [5m]))

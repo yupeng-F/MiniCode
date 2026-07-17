@@ -1,0 +1,4 @@
+# 5xx 错误率（按 service 聚合）
+sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+  /
+sum(rate(http_requests_total[5m])) by (service)

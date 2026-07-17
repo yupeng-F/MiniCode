@@ -1,0 +1,2 @@
+# 按 trace_id 拉取全链路日志
+{job="app"} | json | trace_id="<TRACE_ID>"

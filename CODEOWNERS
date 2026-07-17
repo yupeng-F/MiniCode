@@ -1,0 +1,15 @@
+# Harness Engineering — CODEOWNERS（GitLab 默认位置：仓库根 / .gitlab / docs）
+# 与 .github/CODEOWNERS 保持同步；本文件供 GitLab 与不识别 .github 的工具使用。
+
+/release/         @release-managers
+/migrations/      @dba @release-managers
+/observability/   @sre
+/config/          @sre @release-managers
+/.github/         @release-managers
+/.gitlab/         @release-managers
+/lint/            @release-managers
+/scripts/         @release-managers
+/docs/CICD.md     @release-managers
+/docs/MIGRATION.md @dba @release-managers
+/docs/SECRETS.md  @sre @release-managers
+/docs/OBSERVABILITY.md @sre

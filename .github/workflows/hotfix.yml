@@ -1,0 +1,114 @@
+# H-10: Hotfix Pipeline — 生产应急修复（CICD.md）
+#
+# 阶段：init → quality → image-build → pr-to-main → deploy → back-merge
+#   init       创建 hotfix/<issue> 分支与 PLAN.md 模板
+#   quality    L1 质量评分 + critical 回归（hotfix 仅跑 critical 用例集，避免 P0 阻塞）
+#   image      强制重建 prod-hotfix-<sha> 镜像
+#   pr         创建 hotfix/<issue> → main 的 PR，等待 Boss release-approval
+#   deploy     PR 合并后人工触发 production.yml；本 stage 不直接部署
+#   back-merge main → test → develop
+
+name: Hotfix
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_id:
+        description: 'Issue id（如 INC-1234）'
+        required: true
+        type: string
+      severity:
+        description: '严重度'
+        required: true
+        default: 'p1'
+        type: choice
+        options: [p0, p1]
+      stage:
+        description: 'init | quality | image | pr | back-merge'
+        required: true
+        default: 'init'
+        type: choice
+        options: [init, quality, image, pr, back-merge]
+
+env:
+  NODE_VERSION: '20'
+  HARNESS_IMAGE_REPO: ghcr.io/${{ github.repository }}
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+
+jobs:
+  hotfix:
+    name: Hotfix ${{ inputs.stage }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, token: '${{ secrets.GITHUB_TOKEN }}' }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+
+      - uses: ./.github/actions/setup-harness-scripts
+
+      - name: Configure git
+        run: |
+          git config user.name "harness-hotfix"
+          git config user.email "harness-hotfix@users.noreply.github.com"
+
+      - name: Switch to hotfix branch
+        if: inputs.stage != 'init'
+        run: git switch 'hotfix/${{ inputs.issue_id }}' || git switch -c 'hotfix/${{ inputs.issue_id }}' "origin/hotfix/${{ inputs.issue_id }}"
+
+      - name: Init hotfix branch
+        if: inputs.stage == 'init'
+        run: |
+          set -euo pipefail
+          node scripts/hotfix.mjs init '${{ inputs.issue_id }}' --severity '${{ inputs.severity }}'
+          git add -A
+          git diff --cached --quiet || git commit -m "hotfix(${{ inputs.issue_id }}): scaffold"
+          git push -u origin HEAD
+
+      # ─── 门禁：L1 评分 + critical 回归 ──────────────────────────────────
+      - name: Install
+        if: inputs.stage == 'quality'
+        run: |
+          if [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install --frozen-lockfile; \
+          elif [ -f package-lock.json ]; then npm ci; fi
+
+      - name: Quality L1
+        if: inputs.stage == 'quality'
+        run: node scripts/quality-score.mjs --ci --level L1
+
+      - name: Critical regression
+        if: inputs.stage == 'quality'
+        run: pnpm test:regression -- --grep '@critical'
+
+      # ─── 镜像构建（仅 hotfix 允许 force-rebuild）──────────────────────────
+      - name: Build hotfix image
+        if: inputs.stage == 'image'
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse --short HEAD)
+          node scripts/image-promote.mjs --force-rebuild --hotfix '${{ inputs.issue_id }}' --tag "prod-hotfix-${{ inputs.issue_id }}-$SHA"
+
+      # ─── PR 到 main（等待 release-approval）─────────────────────────────
+      - name: Create PR to main
+        if: inputs.stage == 'pr'
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          set -euo pipefail
+          node scripts/pr-adapter.mjs create \
+            --base main \
+            --head 'hotfix/${{ inputs.issue_id }}' \
+            --title 'hotfix(${{ inputs.issue_id }}): ${{ inputs.severity }}' \
+            --labels hotfix
+
+      - name: Back-merge to test/develop
+        if: inputs.stage == 'back-merge'
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: node scripts/hotfix.mjs back-merge '${{ inputs.issue_id }}'

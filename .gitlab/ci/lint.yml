@@ -1,0 +1,76 @@
+# Sprint 11 — GitLab CI: lint stage (3 jobs)
+# 设计依据：sprint-11-gitlab-ci-design.md §3.1 #1, #2, #9 / §7.1
+# 上游 GH 来源：.github/workflows/pr-lint.yml / docs.yml / main-gate.yml
+#
+# 本文件 job：
+#   - pr-lint（Conventional Commits 标题校验，MR → main|develop）
+#   - doc-lint（文档健康检查，MR + paths 命中）
+#   - main-source-gate（冻结：仅允许 release/* 或 hotfix/* → main）
+#
+# 注意：main-source-gate 是 6 项 status check 之一，job key 必须严格 = `main-source-gate`
+
+pr-lint:
+  stage: lint
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop")'
+  script:
+    - |
+      echo "MR title: $CI_MERGE_REQUEST_TITLE"
+      PATTERN='^(feat|fix|refactor|chore|docs|test|perf|ci|build|style|revert)(\(.+\))?: .{3,}'
+      if echo "$CI_MERGE_REQUEST_TITLE" | grep -qE "$PATTERN"; then
+        echo "PR title matches Conventional Commits"
+      else
+        echo "PR title does NOT match Conventional Commits: $CI_MERGE_REQUEST_TITLE"
+        exit 1
+      fi
+    # 描述必须包含必要章节（与 GH pr-lint.yml 行为对齐）
+    - |
+      DESC="${CI_MERGE_REQUEST_DESCRIPTION:-}"
+      MISSING=0
+      for SECTION in "变更摘要" "关联 Story" "测试结果"; do
+        if ! printf '%s' "$DESC" | grep -qF "$SECTION"; then
+          echo "missing section in PR description: $SECTION"
+          MISSING=1
+        fi
+      done
+      if [ "$MISSING" -ne 0 ]; then exit 1; fi
+
+doc-lint:
+  stage: lint
+  extends: .node-pnpm
+  variables:
+    MAX_AGE_DAYS: "30"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop")'
+      changes:
+        - 'docs/**/*'
+        - 'AGENTS.md'
+        - 'ARCHITECTURE.md'
+        - 'PROJECT_RULES.md'
+        - 'USER_STORIES.md'
+  script:
+    - node scripts/doc-lint.mjs --ci --max-age "$MAX_AGE_DAYS"
+
+# 冻结 status check：main-source-gate（design §7.1）
+# 纯 shell 校验，不需 pnpm，不 extends .node-pnpm
+main-source-gate:
+  stage: lint
+  image: alpine:3.19
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+  script:
+    - |
+      HEAD_REF="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+      echo "MR source branch: $HEAD_REF"
+      case "$HEAD_REF" in
+        release/*|hotfix/*)
+          echo "allowed source branch: $HEAD_REF"
+          ;;
+        *)
+          echo "main only accepts release/* or hotfix/* PRs"
+          echo "current source branch: $HEAD_REF"
+          exit 1
+          ;;
+      esac

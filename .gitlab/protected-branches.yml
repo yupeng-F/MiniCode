@@ -1,0 +1,47 @@
+# <project> GitLab Protected Branches (template; copied from imchat Sprint 10 T-02)
+
+version: 1
+
+protected_branches:
+  - name: develop
+    push_access_level: no_one
+    merge_access_level: developer
+    allow_force_push: false
+    required_approval_count: 1
+    required_status_checks: [l1-quality]
+
+  - name: test
+    push_access_level: no_one
+    merge_access_level: maintainer
+    allow_force_push: false
+    required_approval_count: 1
+    required_status_checks: [l2-quality, integration]
+
+  - name: main
+    push_access_level: no_one
+    merge_access_level: maintainer
+    allow_force_push: false
+    code_owner_approval_required: true
+    required_approval_count: 1
+    required_status_checks: [main-source-gate, regression, approve]
+
+  - name: "release/*"
+    push_access_level: no_one
+    merge_access_level: maintainer
+    allow_force_push: false
+    code_owner_approval_required: true
+    required_approval_count: 1
+    required_status_checks: [regression, approve]
+
+  - name: "hotfix/*"
+    push_access_level: no_one
+    merge_access_level: maintainer
+    allow_force_push: false
+    code_owner_approval_required: true
+    required_approval_count: 1
+    required_status_checks: []
+
+merge_request_settings:
+  squash_on_merge_default: true
+  delete_source_branch_on_merge: true
+  remove_source_branch_after_merge: true

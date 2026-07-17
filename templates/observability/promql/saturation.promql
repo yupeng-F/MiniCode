@@ -1,0 +1,4 @@
+# CPU 饱和度
+avg by (service) (rate(container_cpu_usage_seconds_total[5m]))
+  /
+avg by (service) (kube_pod_container_resource_limits_cpu_cores)

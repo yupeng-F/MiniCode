@@ -1,0 +1,46 @@
+# H-11: 文档知识库健康检查 CI — PR 触发
+# Harness Engineering: 文档也是代码，知识库必须保鲜。
+#
+# 检查: 链接有效性 → 索引完整性 → 结构合规 → 新鲜度 → 验证状态
+# 自定义: 修改下方 env 变量调整检查策略
+
+name: Docs Health
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'ARCHITECTURE.md'
+      - 'PROJECT_RULES.md'
+      - 'USER_STORIES.md'
+
+env:
+  MAX_AGE_DAYS: '30'
+
+permissions:
+  contents: read
+
+jobs:
+  doc-lint:
+    name: Doc Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 新鲜度检查需要 git 历史
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: ./.github/actions/setup-harness-scripts
+
+      - name: Run doc-lint
+        run: |
+          # doc-lint is now a Node.js script
+          node scripts/doc-lint.mjs --ci --max-age "${{ env.MAX_AGE_DAYS }}"

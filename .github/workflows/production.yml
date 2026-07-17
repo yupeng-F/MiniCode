@@ -1,0 +1,139 @@
+# H-06: Production Deploy — 唯一 prod 入口
+# Harness Engineering CICD.md
+
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: '已在 test 验证过的镜像标签（如 test-abc1234）'
+        required: true
+        type: string
+      release-version:
+        description: '本次正式发布版本号（vX.Y.Z）'
+        required: true
+        type: string
+      confirm:
+        description: '输入 "deploy" 确认生产环境部署'
+        required: true
+        type: string
+
+env:
+  NODE_VERSION: '20'
+  HARNESS_IMAGE_REPO: ghcr.io/${{ github.repository }}
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+
+jobs:
+  validate:
+    name: Validate Production Input
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm deployment
+        run: |
+          if [ "${{ inputs.confirm }}" != "deploy" ]; then
+            echo "confirm must be 'deploy'"
+            exit 1
+          fi
+          if ! echo "${{ inputs.image-tag }}" | grep -Eq '^test-[A-Za-z0-9._-]+$'; then
+            echo "image-tag must be a tested image in the form test-<sha>"
+            exit 1
+          fi
+          if ! echo "${{ inputs.release-version }}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)?$'; then
+            echo "invalid release-version: ${{ inputs.release-version }}"
+            exit 1
+          fi
+
+  promote-image:
+    name: Promote Production Image
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      prod-tag: ${{ steps.tag.outputs.prod_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve production tag
+        id: tag
+        run: |
+          SOURCE_SHA=$(printf '%s' "${{ inputs.image-tag }}" | sed -E 's/^[^-]+-//')
+          echo "prod_tag=prod-${{ inputs.release-version }}-${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Promote image
+        run: node scripts/image-promote.mjs --from "${{ inputs.image-tag }}" --to "${{ steps.tag.outputs.prod_tag }}"
+
+  deploy:
+    name: Deploy Production
+    needs: promote-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Check branch mapping
+        run: node scripts/branch-env-check.mjs --env prod
+      - name: Preflight production secrets
+        run: node scripts/deploy.mjs preflight-secrets --env prod
+      - name: Deploy production environment
+        run: node scripts/deploy.mjs --env prod --tag "${{ needs.promote-image.outputs.prod-tag }}"
+
+  watch:
+    name: Watch Production Health
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Watch production health
+        run: node scripts/deploy.mjs watch --env prod --window 30m
+
+  back-merge:
+    name: Back Merge
+    needs: watch
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Configure git
+        run: |
+          git config user.name "harness-back-merge"
+          git config user.email "harness-back-merge@users.noreply.github.com"
+      - name: Back merge main to test and develop
+        run: node scripts/back-merge.mjs --from main --to test,develop --reason release

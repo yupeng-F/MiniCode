@@ -1,0 +1,98 @@
+{
+  "_doc": "<project> GitHub branch protection (template; copied from imchat Sprint 10 T-02 hardening). Stable contexts align with docs/CICD.md and Sprint 10 T-02.",
+  "rules": {
+    "develop": {
+      "required_status_checks": {
+        "strict": true,
+        "contexts": ["Code Quality / L1 Quality"]
+      },
+      "enforce_admins": true,
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": true,
+        "required_approving_review_count": 1
+      },
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "required_linear_history": true,
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false,
+      "delete_branch_on_merge": true
+    },
+    "test": {
+      "required_status_checks": {
+        "strict": true,
+        "contexts": ["Test Staging / L2 Quality", "Test Staging / Integration"]
+      },
+      "enforce_admins": true,
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": true,
+        "required_approving_review_count": 1
+      },
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "required_linear_history": true,
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false,
+      "delete_branch_on_merge": true
+    },
+    "main": {
+      "required_status_checks": {
+        "strict": true,
+        "contexts": ["Main Branch Gate / Main Source Gate", "Release CD / Regression", "Release CD / Release Approval"]
+      },
+      "enforce_admins": true,
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": true,
+        "require_code_owner_reviews": true,
+        "required_approving_review_count": 1
+      },
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "required_linear_history": true,
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false,
+      "delete_branch_on_merge": true
+    },
+    "release/*": {
+      "required_status_checks": {
+        "strict": true,
+        "contexts": ["Release CD / Regression", "Release CD / Release Approval"]
+      },
+      "enforce_admins": true,
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": true,
+        "require_code_owner_reviews": true,
+        "required_approving_review_count": 1
+      },
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "required_linear_history": true,
+      "allow_squash_merge": false,
+      "allow_merge_commit": true,
+      "allow_rebase_merge": false,
+      "delete_branch_on_merge": true
+    },
+    "hotfix/*": {
+      "required_status_checks": {
+        "strict": true,
+        "contexts": []
+      },
+      "enforce_admins": true,
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": true,
+        "require_code_owner_reviews": true,
+        "required_approving_review_count": 1
+      },
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "required_linear_history": true,
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false,
+      "delete_branch_on_merge": true
+    }
+  }
+}

@@ -1,0 +1,247 @@
+# H-09: Release CD — release/* 的 release-prep / regression / approval / archive 编排
+# Harness Engineering CICD.md
+
+name: Release CD
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号（vX.Y.Z）'
+        required: true
+        type: string
+      sprints:
+        description: '纳入此次 release 的 sprint id（逗号分隔；archive 阶段可留空）'
+        required: false
+        type: string
+      stage:
+        description: 'init | scaffold | aggregate-quality | regression | pr | approve | archive'
+        required: true
+        default: 'init'
+        type: choice
+        options: [init, scaffold, aggregate-quality, regression, pr, approve, archive]
+      summary:
+        description: 'approve 阶段的上线说明'
+        required: false
+        type: string
+
+env:
+  NODE_VERSION: '20'
+  HARNESS_IMAGE_REPO: ghcr.io/${{ github.repository }}
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+
+jobs:
+  init:
+    name: Init
+    if: inputs.stage == 'init'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Configure git
+        run: |
+          git config user.name "harness-release"
+          git config user.email "harness-release@users.noreply.github.com"
+      - name: Run init
+        run: node scripts/release.mjs init "${{ inputs.version }}" --sprints "${{ inputs.sprints }}"
+      - name: Commit release artifacts
+        run: |
+          git add -A
+          git diff --cached --quiet || git commit -m "release(${{ inputs.version }}): init"
+          git push -u origin HEAD
+
+  scaffold:
+    name: Scaffold
+    if: inputs.stage == 'scaffold'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Configure git
+        run: |
+          git config user.name "harness-release"
+          git config user.email "harness-release@users.noreply.github.com"
+      - name: Run scaffold
+        run: node scripts/release.mjs scaffold "${{ inputs.version }}"
+      - name: Commit release artifacts
+        run: |
+          git add -A
+          git diff --cached --quiet || git commit -m "release(${{ inputs.version }}): scaffold"
+          git push -u origin HEAD
+
+  aggregate-quality:
+    name: Aggregate Quality
+    if: inputs.stage == 'aggregate-quality'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Configure git
+        run: |
+          git config user.name "harness-release"
+          git config user.email "harness-release@users.noreply.github.com"
+      - name: Aggregate sprint quality
+        run: node scripts/release.mjs aggregate-quality "${{ inputs.version }}"
+      - name: Commit release artifacts
+        run: |
+          git add -A
+          git diff --cached --quiet || git commit -m "release(${{ inputs.version }}): aggregate-quality"
+          git push -u origin HEAD
+
+  regression-pr:
+    name: PR Regression
+    if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.31.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Check branch mapping
+        run: node scripts/branch-env-check.mjs --env test --branch "${{ github.head_ref }}"
+      - name: Validate test environment schema
+        run: node scripts/env-check.mjs validate --mode schema --env test
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: PR regression checks
+        run: |
+          pnpm build
+          pnpm typecheck
+          pnpm lint
+          pnpm test
+
+  regression:
+    name: Regression
+    if: inputs.stage == 'regression'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Check branch mapping
+        run: node scripts/branch-env-check.mjs --env test --branch "${{ github.head_ref || github.ref_name }}"
+      - name: Run regression
+        run: node scripts/release.mjs regression "${{ inputs.version }}"
+
+  create-pr:
+    name: Create Release PR
+    if: inputs.stage == 'pr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Create release PR
+        run: node scripts/release.mjs pr "${{ inputs.version }}"
+
+  approve:
+    name: Release Approval
+    if: inputs.stage == 'approve' || (github.event_name == 'pull_request' && (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Configure git
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "harness-release"
+          git config user.email "harness-release@users.noreply.github.com"
+      - name: Validate release approval path
+        if: github.event_name == 'pull_request'
+        run: |
+          HEAD_REF="${{ github.head_ref }}"
+          case "$HEAD_REF" in
+            release/*|hotfix/*) ;;
+            *)
+              echo "release approval only applies to release/* or hotfix/* PRs"
+              exit 1
+              ;;
+          esac
+          if [ "${{ github.event.pull_request.draft }}" = "true" ]; then
+            echo "draft PR cannot satisfy release approval gate"
+            exit 1
+          fi
+      - name: Record release approval
+        if: github.event_name != 'pull_request'
+        run: node scripts/release.mjs approve "${{ inputs.version }}" --by "${{ github.actor }}" --summary "${{ inputs.summary }}"
+      - name: Commit approval record
+        if: github.event_name != 'pull_request'
+        run: |
+          git add -A
+          git diff --cached --quiet || git commit -m "release(${{ inputs.version }}): approve"
+          git push -u origin HEAD
+
+  archive:
+    name: Archive
+    if: inputs.stage == 'archive'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: ./.github/actions/setup-harness-scripts
+      - name: Archive release branch
+        run: node scripts/release.mjs archive "${{ inputs.version }}"

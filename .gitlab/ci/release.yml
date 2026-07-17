@@ -1,0 +1,145 @@
+# Sprint 11 — GitLab CI: release stage (7 jobs)
+# 设计依据：sprint-11-gitlab-ci-design.md §3.1 #7 / §6.2 / §7.1
+# 上游 GH 来源：.github/workflows/release.yml（7 个 stage）
+#
+# 本文件 job：
+#   - release-init / release-scaffold / release-aggregate-quality / release-pr / release-archive（5 manual，按 STAGE 触发）
+#   - regression（冻结 status check，静态回归，不绑定 test environment）
+#   - approve（冻结 status check，自动触发于 release/* | hotfix/* → main MR）
+#
+# manual 输入参数（design §3.3）：VERSION / SPRINTS / STAGE / SUMMARY；script 第一步打印
+
+release-init:
+  stage: release
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $STAGE == "init"'
+      when: manual
+      allow_failure: false
+  variables:
+    VERSION: ""
+    SPRINTS: ""
+    STAGE: ""
+  script:
+    - 'echo "inputs: VERSION=$VERSION  SPRINTS=$SPRINTS  STAGE=$STAGE"'
+    - git config user.name "harness-release"
+    - git config user.email "harness-release@users.noreply.github.com"
+    - node scripts/release.mjs init "$VERSION" --sprints "$SPRINTS"
+    - |
+      git add -A
+      git diff --cached --quiet || git commit -m "release($VERSION): init"
+      git push -u origin HEAD
+
+release-scaffold:
+  stage: release
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $STAGE == "scaffold"'
+      when: manual
+      allow_failure: false
+  variables:
+    VERSION: ""
+    STAGE: ""
+  script:
+    - 'echo "inputs: VERSION=$VERSION  STAGE=$STAGE"'
+    - git config user.name "harness-release"
+    - git config user.email "harness-release@users.noreply.github.com"
+    - node scripts/release.mjs scaffold "$VERSION"
+    - |
+      git add -A
+      git diff --cached --quiet || git commit -m "release($VERSION): scaffold"
+      git push -u origin HEAD
+
+release-aggregate-quality:
+  stage: release
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $STAGE == "aggregate-quality"'
+      when: manual
+      allow_failure: false
+  variables:
+    VERSION: ""
+    STAGE: ""
+  script:
+    - 'echo "inputs: VERSION=$VERSION  STAGE=$STAGE"'
+    - git config user.name "harness-release"
+    - git config user.email "harness-release@users.noreply.github.com"
+    - node scripts/release.mjs aggregate-quality "$VERSION"
+    - |
+      git add -A
+      git diff --cached --quiet || git commit -m "release($VERSION): aggregate-quality"
+      git push -u origin HEAD
+
+# 冻结 status check：regression（design §7.1）
+# 触发：release/* 或 hotfix/* → main 的 MR 自动跑（与 GH release.yml regression job 行为对齐）
+regression:
+  stage: release
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^(release|hotfix)\//'
+  script:
+    - node scripts/branch-env-check.mjs --env test --branch "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    - node scripts/env-check.mjs validate --mode schema --env test
+    - pnpm build
+    - pnpm typecheck
+    - pnpm lint
+    - pnpm test
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - 'test-results/'
+      - 'docs/test-reports/'
+    reports:
+      junit:
+        - 'reports/junit/*.xml'
+
+release-pr:
+  stage: release
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $STAGE == "pr"'
+      when: manual
+      allow_failure: false
+  variables:
+    VERSION: ""
+    STAGE: ""
+  script:
+    - 'echo "inputs: VERSION=$VERSION  STAGE=$STAGE"'
+    - node scripts/release.mjs pr "$VERSION"
+
+# 冻结 status check：approve（design §7.1）
+# 触发：release/* 或 hotfix/* → main 的 MR 自动跑（GH release.yml approve job 的 PR 分支等价）
+approve:
+  stage: release
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^(release|hotfix)\//'
+  script:
+    - |
+      HEAD_REF="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+      case "$HEAD_REF" in
+        release/*|hotfix/*) ;;
+        *)
+          echo "release approval only applies to release/* or hotfix/* MRs"
+          exit 1
+          ;;
+      esac
+      if [ "$CI_MERGE_REQUEST_DRAFT" = "true" ]; then
+        echo "draft MR cannot satisfy release approval gate"
+        exit 1
+      fi
+
+release-archive:
+  stage: release
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $STAGE == "archive"'
+      when: manual
+      allow_failure: false
+  variables:
+    VERSION: ""
+    STAGE: ""
+  script:
+    - 'echo "inputs: VERSION=$VERSION  STAGE=$STAGE"'
+    - node scripts/release.mjs archive "$VERSION"

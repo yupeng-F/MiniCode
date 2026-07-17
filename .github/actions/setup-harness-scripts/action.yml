@@ -1,0 +1,18 @@
+# Composite action: 安装 Harness scripts/ 目录的 Node 依赖（js-yaml 等）
+# 所有调用 `node scripts/*.mjs` 的 workflow 在 setup-node 之后调用一次本 action。
+# 与 install.sh:338 的本地安装等价，避免每个 workflow 重复 `npm install --prefix scripts`。
+
+name: Setup Harness Scripts
+description: Install dependencies for Harness scripts/ (js-yaml, @playwright/test, ...)
+
+runs:
+  using: composite
+  steps:
+    - name: Install scripts dependencies
+      shell: bash
+      run: |
+        if [ -f scripts/package.json ]; then
+          npm install --prefix scripts --no-audit --no-fund --silent
+        else
+          echo "::warning::scripts/package.json 不存在，跳过 Harness scripts 依赖安装"
+        fi

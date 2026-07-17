@@ -39,3 +39,14 @@ test("安全审计固定使用官方 registry", () => {
   assert.ok(audit);
   assert.equal(audit.args.includes("--registry=https://registry.npmjs.org"), true);
 });
+
+test("Python 构建默认复用本地环境以保持离线", () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+  const config = loadHarnessConfig(root);
+  const pythonBuild = config.commands.build.find(
+    (command) => command.executable === "python" && command.args.includes("build"),
+  );
+
+  assert.ok(pythonBuild);
+  assert.equal(pythonBuild.args.includes("--no-isolation"), true);
+});

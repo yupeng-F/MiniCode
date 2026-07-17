@@ -1,0 +1,73 @@
+# Sprint 11 — GitLab CI: quality stage (3 jobs)
+# 设计依据：sprint-11-gitlab-ci-design.md §3.1 #3, #5（前两 job） / §6.2 / §7.1
+# 上游 GH 来源：.github/workflows/quality.yml（l1） / staging.yml（l2 + integration）
+#
+# 本文件 job：
+#   - l1-quality（冻结 status check，sprint/* → develop MR）
+#   - l2-quality（冻结 status check，promote/* → test MR）
+#   - integration（冻结 status check，promote/* → test MR）
+#
+# environment.name 留空：单测/lint/in-process 集成测试不连测试机（design §6.2）
+
+# 冻结 status check：l1-quality
+l1-quality:
+  stage: quality
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^sprint[-\/]/'
+  script:
+    - node scripts/env-check.mjs validate --mode schema
+    - node scripts/secrets-sync-check.mjs
+    - pnpm build
+    - pnpm typecheck
+    - pnpm lint
+    - pnpm test
+    - node scripts/code-garden.mjs --ci
+    - |
+      SPRINT_REF="${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME#sprint/}"
+      SPRINT_ID="${SPRINT_REF#sprint-}"
+      node scripts/quality-score.mjs --sprint "$SPRINT_ID" --level L1
+  artifacts:
+    when: on_success
+    expire_in: 30 days
+    paths:
+      - 'docs/test-reports/'
+      - 'coverage/'
+    reports:
+      junit:
+        - 'reports/junit/*.xml'
+
+# 冻结 status check：l2-quality
+l2-quality:
+  stage: quality
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "test" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^promote\//'
+  script:
+    - node scripts/branch-env-check.mjs --env test --branch "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    - pnpm build
+    - pnpm typecheck
+    - pnpm lint
+    - pnpm test
+    - |
+      SPRINT_ID="${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME#promote/}"
+      node scripts/quality-score.mjs --sprint "$SPRINT_ID" --level L2
+  artifacts:
+    when: on_success
+    expire_in: 30 days
+    paths:
+      - 'docs/test-reports/'
+
+# 冻结 status check：integration
+# 注意：在 GH staging.yml 里 integration job 注入了 21 项 TEST_*；此处遵循 design §6.2
+# 决定不设 environment.name（不连测试机），跑 in-process 集成测试 + 配置可达性预检
+integration:
+  stage: quality
+  extends: .node-pnpm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "test" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^promote\//'
+  script:
+    - node scripts/branch-env-check.mjs --env test --branch "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    - node scripts/env-check.mjs check test
+    - node scripts/env-check.mjs validate --mode schema --env test
+    - node scripts/verify.mjs profile-check

@@ -1,0 +1,60 @@
+/* Harness 应用入口 CSS（Tailwind v4 + 设计 tokens）
+ *
+ * 安装位置：web/src/app.css（或等价入口）。
+ * 复用：tokens.css 由 install.sh 同步覆盖；本文件仅首次创建。
+ *
+ * 自定义：项目可在本文件追加业务专属基础样式，但禁止修改 tokens.css。
+ */
+
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Tailwind v4: 把 CSS 变量映射为语义工具类（如 bg-primary / text-muted） */
+@theme inline {
+  --color-primary:        var(--color-primary);
+  --color-primary-hover:  var(--color-primary-hover);
+  --color-primary-soft:   var(--color-primary-soft);
+  --color-success:        var(--color-success);
+  --color-success-soft:   var(--color-success-soft);
+  --color-warning:        var(--color-warning);
+  --color-warning-soft:   var(--color-warning-soft);
+  --color-danger:         var(--color-danger);
+  --color-danger-soft:    var(--color-danger-soft);
+  --color-info:           var(--color-info);
+  --color-info-soft:      var(--color-info-soft);
+  --color-surface:        var(--color-surface);
+  --color-surface-soft:   var(--color-surface-soft);
+  --color-border:         var(--color-border);
+  --color-text:           var(--color-text);
+  --color-muted:          var(--color-text-muted);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+}
+
+/* 全局基础 */
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 焦点环（A11y） */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* 选区 */
+::selection { background: var(--color-primary-soft); color: var(--color-primary); }

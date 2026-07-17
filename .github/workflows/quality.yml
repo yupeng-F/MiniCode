@@ -1,0 +1,69 @@
+# H-04: Sprint CI — sprint-* / sprint/* -> develop 的 L1 质量门禁
+# Harness Engineering CICD.md
+
+name: Code Quality
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '10.31.0'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  l1-quality:
+    name: L1 Quality
+    # PR 提交到 develop/main 时必须无条件触发静态质量门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: ./.github/actions/setup-harness-scripts
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate environment registry
+        run: node scripts/env-check.mjs validate
+
+      - name: Sync secrets declarations
+        run: node scripts/secrets-sync-check.mjs
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Code Garden
+        run: node scripts/code-garden.mjs --ci
+
+      - name: L1 quality score
+        run: |
+          SPRINT_REF="${GITHUB_HEAD_REF#sprint/}"
+          SPRINT_ID="${SPRINT_REF#sprint-}"
+          node scripts/quality-score.mjs --sprint "$SPRINT_ID" --level L1
