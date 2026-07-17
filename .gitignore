@@ -17,6 +17,7 @@ eval/results/
 sigma/
 学习文档/
 .reasonix/
+.worktrees/
 
 # Build artifacts
 *.egg-info/
