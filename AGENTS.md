@@ -56,8 +56,11 @@ Tool-Use Loop + Harness Runtime + Context Management + Markdown Memory
 
 ## 4. 推荐阅读顺序
 
-1. [文档导航](docs/00_文档导航.md)
-2. [项目目标与架构设计](docs/01_项目目标与架构设计.md)
+1. [架构入口](ARCHITECTURE.md)
+2. [项目规则](PROJECT_RULES.md)
+3. [用户故事](USER_STORIES.md)
+4. [文档导航](docs/00_文档导航.md)
+5. [项目目标与架构设计](docs/01_项目目标与架构设计.md)
 
 ## 5. 项目约束
 
@@ -69,6 +72,7 @@ Tool-Use Loop + Harness Runtime + Context Management + Markdown Memory
 - 默认只读，受控写入，高风险审批
 - 工作区外路径默认拒绝
 - Markdown Memory 是长期记忆主路径，向量库只做辅助
+- 新增文档与代码注释使用中文，标识符、命令和文件路径保留英文
 
 ## 6. 文档维护约定
 
