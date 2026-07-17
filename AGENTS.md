@@ -4,7 +4,15 @@
 
 ## 1. 项目是什么
 
-这是一个基于 `LangGraph + Harness` 思想构建的 `Agentic Coding Assistant` 项目。
+这是一个本地优先的 `Agentic Coding Assistant` 项目。
+
+当前最新架构主线是：
+
+```text
+Tool-Use Loop + Harness Runtime + Context Management + Markdown Memory
+```
+
+项目以接近 Claude Code 思路的本地编码 Agent 为目标：模型通过工具调用循环推进任务，Harness Runtime 负责安全执行和审批，Context Manager 负责上下文投影与压缩，Memory 以 Markdown 文件为主进行长期沉淀。
 
 产品目标：
 - 帮助理解代码仓库
@@ -16,77 +24,51 @@
 
 当前处于：
 
-**`Phase 5：工程增强（Trace / Eval / Audit）— ✅ 已完成`**
+**架构迁移完成，进入产品化完善阶段**
 
-### 已完成
+旧 `multi_agents / LangGraph` 主线已经移除，当前可运行实现统一位于 `src/minicode/`。QueryLoop、Harness Runtime、DeepSeek 工具协议、工作区安全、审批、上下文分页与裁剪、项目级 Markdown Memory、SQLite 项目/会话索引和 React 三栏工作台已经形成可用基线。
 
-- ✅ LangGraph StateGraph 真实实现（11 节点，9 阶段状态机）
-- ✅ AgentDecision 协议（所有 Agent 统一为 `AgentInput → AgentDecision`）
-- ✅ 四种模式路由（Ask / Plan / Act / Review）
-- ✅ 返工回路（Review → Implement, Test → Implement，上限控制）
-- ✅ HITL 审批中断（LangGraph 原生 `interrupt` + `Command(resume=...)`）
-- ✅ Harness Runtime 执行链路（Policy → Executor → Result）
-- ✅ ToolExecutor 真实工具分发（read_file / write_file / search_code / run_shell）
-- ✅ CLI 流式执行与中断恢复
-- ✅ 大模型 API 接入（阿里云百炼 qwen3.6-plus，OpenAI 兼容接口）
-- ✅ `.env` 配置管理（python-dotenv 自动加载）
-- ✅ 测试体系（41 个单元测试与集成测试通过）
-- ✅ Master-Specialist 架构改造
-- ✅ ToolRegistry 按角色裁剪工具可见性
-- ✅ ChromaDB 向量库记忆系统（4 Collection + 滑动窗口 + LLM 摘要）
-- ✅ Web UI 交互界面（FastAPI + SSE + VS Code 风格前端）
-- ✅ Shell 沙箱安全执行
-- ✅ 审批流程图接线（高风险工具路由到 execute_tool_approval 节点）
-- ✅ Plan 去重（apply_decision 跳过重复 plan）
-- ✅ Trace 事件系统（5 类事件插桩 + Debug 面板时间线 Tab）
-- ✅ Eval 评测框架（JSON 任务定义 + 评分器 + 运行器 + 报告）
-- ✅ Audit 审计日志（write_file/run_shell 自动 JSONL 持久化）
-- ✅ UI 增强（Markdown 渲染 + Agent 可视化 + 消息折叠）
+尚未完成的产品化能力主要是：受控 SubAgent、持久化 trace/audit/eval、服务重启后的审批恢复、完整 Diff/Plan/Artifact 前端和更系统的自动记忆治理。这些是迁移后的后续路线，不影响“旧架构已完成迁移”的结论。
 
-### 待开始
+新的设计目标是把系统收敛为：
 
-- 暂无（Phase 0-5 已全部完成）
+- `QueryLoop`：模型驱动的工具调用主循环
+- `Harness Runtime`：唯一安全执行入口
+- `ToolSpec + RiskProfile`：工具能力与风险声明
+- `WorkspaceManager`：工作区边界与路径治理
+- `ContextManager + ArtifactStore`：上下文投影、大结果落盘、自动压缩
+- `Markdown Memory`：项目规则、用户偏好、失败案例的文件化记忆
+- `CLI + Web UI`：本地 daemon 上的双交互入口
 
 ## 3. 顶层技术决策
 
-### 智能体架构：Master-Specialist
-
-```text
-Master Agent（唯一决策中枢）
-  │
-  ├── Explorer Specialist（工具：read_file, search_code, list_directory）
-  ├── Coder Specialist（工具：read_file, write_file, list_directory, run_shell）
-  ├── Reviewer Specialist（工具：read_file, search_code）
-  ├── Tester Specialist（工具：run_shell, read_file）
-  └── Memory Writer Specialist（不调工具，只写记忆）
-```
-
-- 编排内核：`LangGraph`
-- 协作范式：`Master-Specialist + HITL Approval`
+- 产品方向：`Local-first coding assistant`
+- 核心循环：`Tool-Use Loop`
+- 生命周期与中断：`QueryLoop + SQLite + Approval API`
 - 执行控制：`Harness Runtime`
-- 记忆系统：`ChromaDB 向量库 + 滑动窗口压缩`
-- 产品方向：`coding assistant`
-- 安全策略：`默认只读，受控写入，高风险审批`
-- 交互方式：`Web UI（FastAPI + 原生前端）`
+- 工具系统：`ToolSpec + RiskProfile + PolicyEngine`
+- 代码检索：`Glob / Grep / Read`，优先使用 `ripgrep`
+- 文件修改：`patch / diff` 工作流，弱化整文件覆盖
+- 记忆系统：`Markdown Memory` 为主，`ChromaDB` 可选辅助
+- 状态存储：`SQLite + 文件系统`
+- 交互方式：`CLI + Web UI`
+- 运行位置：用户本机 local daemon，默认只操作指定 workspace
 
 ## 4. 推荐阅读顺序
 
 1. [文档导航](docs/00_文档导航.md)
-2. [项目目标与实施路线](docs/01_项目目标与实施路线.md)
-3. [系统架构与模块设计](docs/02_系统架构与模块设计.md)
-4. [智能体协作、状态流转与权限设计](docs/03_智能体协作_状态流转与权限设计.md)
-5. [运行时与记忆系统设计](docs/04_运行时与记忆系统设计.md)
-6. [项目结构与开发计划](docs/05_项目结构与开发计划.md)
-7. [核心数据结构设计](docs/06_核心数据结构设计.md)
-8. [项目完成度追踪](docs/07_项目完成度追踪.md)
+2. [项目目标与架构设计](docs/01_项目目标与架构设计.md)
 
 ## 5. 项目约束
 
-- Master Agent 是唯一的决策中枢，Specialist Agent 不决策流程
-- Agent 不直接越过 Runtime 执行高风险动作
-- 每个 Agent 只有其专精工具的使用权限
+- Agent 不直接越过 Runtime 执行副作用动作
+- 所有文件修改、shell、git 写操作必须经过 Harness Runtime
+- 优先使用专用工具，不默认使用 Bash
 - 不把所有历史对话和工具输出直接塞进 prompt
-- 不在没有审批和策略控制时做高风险系统操作
+- 大工具结果必须 artifact 化，prompt 只保留 preview 和引用
+- 默认只读，受控写入，高风险审批
+- 工作区外路径默认拒绝
+- Markdown Memory 是长期记忆主路径，向量库只做辅助
 
 ## 6. 文档维护约定
 
@@ -94,26 +76,21 @@ Master Agent（唯一决策中枢）
 - 文档命名采用中文，方便快速理解
 - 尽量减少继续拆新文档
 
-## 7. 核心代码目录
+## 7. 目标代码目录
 
 ```text
-src/multi_agents/
-  agents/          # Master + Specialist Agent 实现
+src/minicode/
   interfaces/      # CLI + Web UI
-  llm/             # LLM 客户端 + 角色提示词
-  memory/          # 长短记忆 + 上下文管理
-  observability/   # Trace 事件 + Audit 日志
-  orchestrator/    # LangGraph 编排
-  runtime/         # Harness + 策略 + 工具注册
-  schemas/         # 核心数据结构
-  tools/           # 原子工具定义
-
-eval/              # 评测框架（Phase 5 新增）
-  tasks/           #   评测任务 JSON
-  runner.py        #   运行器
-  scorer.py        #   评分器
+  application/     # run/session/approval service
+  engine/          # QueryLoop + prompt builder + model router
+  context/         # context projection + artifact + compact
+  runtime/         # Harness + policy + workspace + approval
+  tools/           # read/grep/edit/test/git/bash/task tools
+  memory/          # Markdown memory + optional vector memory
+  schemas/         # session/tool/event/memory/policy
+  observability/   # trace/audit/eval
 ```
 
 ## 8. 当前状态
 
-所有 Phase 0-5 已全部完成。项目目前处于功能完备、待用户提出新需求或进入维护阶段的稳定状态。
+旧的 `multi_agents` LangGraph 原型及重复设计文档已删除。当前实现以 `src/minicode/` 为准，架构以 `docs/01_项目目标与架构设计.md` 为准，进度以 `docs/superpowers/plans/2026-07-15-minicode-productization.md` 顶部状态表为准。

@@ -1,5 +1,6 @@
 # Environment variables (contains secrets)
 .env
+.minicode/
 
 # Python cache
 __pycache__/
@@ -22,3 +23,7 @@ sigma/
 dist/
 build/
 data/
+
+# Frontend dependencies and caches
+node_modules/
+*.tsbuildinfo

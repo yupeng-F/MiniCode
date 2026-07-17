@@ -1,16 +1,25 @@
 [project]
-name = "multi-agents"
+name = "minicode"
 version = "0.1.0"
-description = "A LangGraph-based multi-agent orchestration scaffold."
+description = "A local-first agentic coding assistant with a tool-use loop and harness runtime."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.8.0",
-    "langgraph>=0.2.0",
-    "langchain-core>=0.3.0",
     "openai>=1.0.0",
     "python-dotenv>=1.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+]
+
+[project.scripts]
+minicode = "minicode.interfaces.cli:main"
+minicode-web = "minicode.interfaces.web.server:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -21,4 +30,3 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

@@ -1,2 +1,0 @@
-"""Multi-agent orchestration scaffold."""
-
