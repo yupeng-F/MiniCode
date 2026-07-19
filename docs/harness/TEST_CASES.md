@@ -35,7 +35,7 @@
 | `execution` | object | — | 执行模式；默认 `mode: standard`。支持 `mode: live` + `env`，用于声明真实链路 smoke |
 | `test_titles` | string[] | — | 该 YAML 对应的具体 Playwright `test(...)` 标题列表；当一个 `spec` 内含多个测试时用于精确映射 |
 
-**模板参考**：`templates/test-case-template.yml`
+**模板参考**：`.harness/framework/templates/test-case-template.yml`
 
 ---
 
@@ -75,7 +75,7 @@
 
 ```
 test-cases/
-├── index.md                    ← 用例索引（模板: templates/test-cases-index.md）
+├── index.md                    ← 用例索引（模板: .harness/framework/templates/test-cases-index.md）
 ├── TC-001.yml
 ├── TC-002.yml
 └── ...

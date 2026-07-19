@@ -1,14 +1,14 @@
 # Migration 规范
 
 > 数据库与配置变更脚本的强制约束。专用于 `migration-design` 任务类型，由 deploy-sprint 的 `release-prep` 任务消费。
-> 流程入口见 `docs/SPRINT.md`，任务规则见 `lint/task-rules.yml`。
+> 流程入口见 `docs/harness/SPRINT.md`，任务规则见 `lint/task-rules.yml`。
 
 ---
 
 ## 目录与命名
 
 ```
-templates/migration/                # 框架模板（项目从此处复制）
+.harness/framework/templates/migration/                # 框架模板（项目从此处复制）
   ├── up.sql.tpl
   ├── down.sql.tpl
   └── README.md

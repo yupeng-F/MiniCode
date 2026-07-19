@@ -9,6 +9,7 @@
     "test": "node tools/harness-check.mjs test",
     "build": "node tools/harness-check.mjs build",
     "test:e2e": "node tools/harness-check.mjs test:e2e",
+    "harness:layout": "node scripts/validate-harness-layout.mjs",
     "test:harness": "node --test tools/harness/*.test.mjs",
     "harness:overlay": "node tools/harness-check.mjs overlay",
     "harness:doctor": "node tools/harness-check.mjs doctor"

@@ -1,9 +1,9 @@
 # Observability
 
 > 线上观测与验证规范。`release` / `prod-deploy` 部署成功后执行。
-> 日志/错误处理规范见 [CODING_BACKEND.md](CODING_BACKEND.md)，部署架构见 [../ARCHITECTURE.md](../ARCHITECTURE.md)。
+> 日志/错误处理规范见 [CODING_BACKEND.md](CODING_BACKEND.md)，部署架构见 [../../ARCHITECTURE.md](../../ARCHITECTURE.md)。
 >
-> **可执行查询模板**：[`templates/observability/`](../templates/observability/)
+> **可执行查询模板**：[`.harness/framework/templates/observability/`](../../.harness/framework/templates/observability/)
 > 含 PromQL（`error-rate` / `p95-latency` / `slo-burn` / `saturation`）与 LogQL
 > （`errors-by-service` / `trace` / `no-secret-leak`）。本文件不再重复展开模板内容。
 >

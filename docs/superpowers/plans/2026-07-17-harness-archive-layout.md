@@ -61,7 +61,7 @@ git commit -m "test: define Harness archive layout contract"
 ### Task 2：归档通用文档并更新引用
 
 **Files:**
-- Move: `docs/CICD.md`, `docs/CODE_REVIEW.md`, `docs/CODING_BACKEND.md`, `docs/CODING_FRONTEND.md`, `docs/DESIGN.md`, `docs/GOLDEN_RULES.md`, `docs/MIGRATION.md`, `docs/OBSERVABILITY.md`, `docs/PRODUCT_ACCEPTANCE.md`, `docs/PRODUCT_SENSE.md`, `docs/QUALITY_SCORE.md`, `docs/RELEASE.md`, `docs/SECRETS.md`, `docs/SPRINT.md`, `docs/TECH_BACKEND.md`, `docs/TECH_FRONTEND.md`, `docs/TEST_CASES.md`, `docs/UI_DESIGN_SYSTEM.md` to `docs/harness/`
+- Move: `docs/harness/CICD.md`, `docs/harness/CODE_REVIEW.md`, `docs/harness/CODING_BACKEND.md`, `docs/harness/CODING_FRONTEND.md`, `docs/harness/DESIGN.md`, `docs/harness/GOLDEN_RULES.md`, `docs/harness/MIGRATION.md`, `docs/harness/OBSERVABILITY.md`, `docs/harness/PRODUCT_ACCEPTANCE.md`, `docs/harness/PRODUCT_SENSE.md`, `docs/harness/QUALITY_SCORE.md`, `docs/harness/RELEASE.md`, `docs/harness/SECRETS.md`, `docs/harness/SPRINT.md`, `docs/harness/TECH_BACKEND.md`, `docs/harness/TECH_FRONTEND.md`, `docs/harness/TEST_CASES.md`, `docs/harness/UI_DESIGN_SYSTEM.md` to `docs/harness/`
 - Create: `docs/harness/README.md`
 - Modify: `AGENTS.md`, `.agent/rules/*.md`, `.gemini/system_prompt.md`, `lint/*.yml`, `lint/harness-plugin.mjs`, `scripts/*.mjs`, `config/*.yml`
 

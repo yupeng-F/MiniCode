@@ -102,7 +102,7 @@ Harness Lock — 环境互斥锁
   lock.mjs owner <env>           # 输出当前 owner（空闲时空字符串）
   lock.mjs force-release <env>
 
-详见 docs/CICD.md。
+详见 docs/harness/CICD.md。
 `);
 }
 

@@ -27,6 +27,7 @@ import {
   join, dirname, basename, relative,
 } from './lib/utils.mjs';
 import { readlinkSync, realpathSync } from 'node:fs';
+import { HARNESS_PATHS } from '../config/harness-paths.mjs';
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ function internalLinkTargetExists(sourceFile, linkPath) {
   if (existsSync(target)) return true;
 
   const rootDocName = linkPath.match(/^\.\.\/(ARCHITECTURE|PROJECT_RULES|USER_STORIES)\.md$/)?.[1];
-  if (rootDocName && existsSync(join('templates', `${rootDocName}.md`))) {
+  if (rootDocName && existsSync(join(HARNESS_PATHS.templates, `${rootDocName}.md`))) {
     return true;
   }
 
@@ -196,12 +197,12 @@ function checkStructure() {
   infoMsg('=== 检查文档结构 ===');
 
   const REQUIRED_SPECS = [
-    'SPRINT.md', 'PRODUCT_SENSE.md', 'DESIGN.md',
-    'CODING_BACKEND.md', 'CODING_FRONTEND.md',
-    'TECH_BACKEND.md', 'TECH_FRONTEND.md',
-    'CODE_REVIEW.md', 'QUALITY_SCORE.md',
-    'PRODUCT_ACCEPTANCE.md', 'RELEASE.md', 'OBSERVABILITY.md',
-    'GOLDEN_RULES.md',
+    'harness/SPRINT.md', 'harness/PRODUCT_SENSE.md', 'harness/DESIGN.md',
+    'harness/CODING_BACKEND.md', 'harness/CODING_FRONTEND.md',
+    'harness/TECH_BACKEND.md', 'harness/TECH_FRONTEND.md',
+    'harness/CODE_REVIEW.md', 'harness/QUALITY_SCORE.md',
+    'harness/PRODUCT_ACCEPTANCE.md', 'harness/RELEASE.md', 'harness/OBSERVABILITY.md',
+    'harness/GOLDEN_RULES.md',
   ];
 
   for (const spec of REQUIRED_SPECS) {

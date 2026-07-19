@@ -479,7 +479,7 @@ tasks:
         - deploy/
         - quality-summary.json
     acceptance:
-      - release-notes.md 八章节齐全（templates/release-notes.md）
+      - release-notes.md 八章节齐全（.harness/framework/templates/release-notes.md）
       - migrations 校验：node scripts/migration-check.mjs all
         deploy/release/<v>/migrations
       - observability 校验：node scripts/observability-check.mjs validate

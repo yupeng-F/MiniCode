@@ -600,7 +600,7 @@ Harness Deploy
   HARNESS_IMAGE_TAR_API   单独指定 api 镜像 tar
   HARNESS_IMAGE_TAR_WEB   单独指定 web 镜像 tar
 
-详见 docs/CICD.md。
+详见 docs/harness/CICD.md。
 `);
 }
 

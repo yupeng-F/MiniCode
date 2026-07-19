@@ -12,6 +12,7 @@
 
 import { info, ok, err, fatal, existsSync, readText, writeText, join } from './lib/utils.mjs';
 import { readdirSync, mkdirSync, copyFileSync } from 'node:fs';
+import { HARNESS_PATHS } from '../config/harness-paths.mjs';
 
 const REQUIRED = {
   'observability/dashboards': { minFiles: 1, hint: 'JSON dashboard 导出（Grafana/CloudWatch 等）' },
@@ -45,8 +46,8 @@ function scaffold() {
   for (const dir of Object.keys(REQUIRED)) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
-  // 从 templates/observability 复制示例
-  const tplRoot = 'templates/observability';
+  // 从 .harness/framework/templates/observability 复制示例
+  const tplRoot = join(HARNESS_PATHS.templates, 'observability');
   if (existsSync(join(tplRoot, 'promql'))) {
     for (const f of readdirSync(join(tplRoot, 'promql'))) {
       const src = join(tplRoot, 'promql', f);
@@ -78,7 +79,7 @@ Harness Observability Check
   observability-check.mjs validate
   observability-check.mjs scaffold
 
-详见 docs/CICD.md 与 docs/OBSERVABILITY.md。
+详见 docs/harness/CICD.md 与 docs/harness/OBSERVABILITY.md。
 `);
 }
 

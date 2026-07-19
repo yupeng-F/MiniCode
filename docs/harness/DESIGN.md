@@ -4,7 +4,7 @@
 > 产品原则见 [PRODUCT_SENSE.md](PRODUCT_SENSE.md)。
 > **统一视觉/组件/前端栈基线见 [UI_DESIGN_SYSTEM.md](UI_DESIGN_SYSTEM.md)**：所有 token、组件状态、栈选型以该文档为唯一真相源；本文件聚焦设计哲学与流程。
 
-**产出物**：设计文档保存至 `docs/design-docs/[feature]-design.md`（须更新 `index.md`，关联 User Story ID）；HTML 原型基于 `templates/ui/prototype-base.html`，token 引用 `templates/ui/tokens.css`。
+**产出物**：设计文档保存至 `docs/design-docs/[feature]-design.md`（须更新 `index.md`，关联 User Story ID）；HTML 原型基于 `.harness/framework/templates/ui/prototype-base.html`，token 引用 `.harness/framework/templates/ui/tokens.css`。
 
 **渐进式加载**：先读 `docs/design-docs/index.md`、本次 PRD 与 UI_DESIGN_SYSTEM，再按需打开相关历史设计。新设计文档必须说明基于旧页面/旧设计的变更、优化、删除；多份参考冲突时以更新且 verified 的设计为准。
 

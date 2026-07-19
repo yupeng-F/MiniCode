@@ -1,7 +1,7 @@
 # 后端技术方案规范
 
 > 后端技术方案设计标准。专用于 `backend-design` 任务类型。
-> 架构见 [../ARCHITECTURE.md](../ARCHITECTURE.md)，编码约束见 [CODING_BACKEND.md](CODING_BACKEND.md)。
+> 架构见 [../../ARCHITECTURE.md](../../ARCHITECTURE.md)，编码约束见 [CODING_BACKEND.md](CODING_BACKEND.md)。
 
 **产出物**：保存至 `docs/tech-docs/`（须更新 `index.md`，关联 User Story ID）
 

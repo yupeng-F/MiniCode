@@ -8,13 +8,13 @@
 
 1. **执行 Sprint 工作流**（规划迭代 / 开启 Sprint / 任务流转）：
    - 必须先加载并遵循 `.agent/rules/harness-sprint.md`。
-   - 依赖文档链：`AGENTS.md` → `docs/SPRINT.md` + `lint/task-rules.yml` + `USER_STORIES.md`。
+   - 依赖文档链：`AGENTS.md` → `docs/harness/SPRINT.md` + `lint/task-rules.yml` + `USER_STORIES.md`。
 2. **单独任务规划/执行/评审**：
    - 规划任务：加载 `.agent/rules/harness-plan.md` 并遵循 `lint/task-rules.yml`。
-   - 执行编码：加载 `.agent/rules/harness-exec.md` 并遵循 `PROJECT_RULES.md` 和 `docs/GOLDEN_RULES.md`。
-   - 质量评审：加载 `.agent/rules/harness-review.md` 并遵循 `docs/CODE_REVIEW.md` 和 `docs/QUALITY_SCORE.md`。
+   - 执行编码：加载 `.agent/rules/harness-exec.md` 并遵循 `PROJECT_RULES.md` 和 `docs/harness/GOLDEN_RULES.md`。
+   - 质量评审：加载 `.agent/rules/harness-review.md` 并遵循 `docs/harness/CODE_REVIEW.md` 和 `docs/harness/QUALITY_SCORE.md`。
 3. **主线/生产发布 (Deploy/Release)**：
-   - 遵循 `docs/RELEASE.md` 并调用 `scripts/release.mjs` 和 `scripts/deploy.mjs`。
+   - 遵循 `docs/harness/RELEASE.md` 并调用 `scripts/release.mjs` 和 `scripts/deploy.mjs`。
 
 ## 2. 绝对安全红线 (Hard Red Lines)
 

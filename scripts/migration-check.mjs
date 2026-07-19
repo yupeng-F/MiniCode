@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 此文档是 MAI-Harness 框架的一部分，请勿在项目中修改，请在框架工程中修改，并覆盖到此项目中。
 // =============================================================================
-// Harness Engineering — Migration Validator (CICD.md / docs/MIGRATION.md)
+// Harness Engineering — Migration Validator (CICD.md / docs/harness/MIGRATION.md)
 //
 // 用法:
 //   migration-check.mjs pair <release-dir>            # 每个 up 必有 down
@@ -110,7 +110,7 @@ Harness Migration Check
   migration-check.mjs rehearse <release-dir>
   migration-check.mjs all <release-dir>
 
-<release-dir> 通常为 deploy/release/<vX.Y.Z>/migrations。详见 docs/MIGRATION.md。
+<release-dir> 通常为 deploy/release/<vX.Y.Z>/migrations。详见 docs/harness/MIGRATION.md。
 `);
 }
 

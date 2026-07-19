@@ -45,7 +45,7 @@
 
 - API 封装在 `services/`，禁止组件直接 fetch，统一错误处理，类型与后端 DTO 同步
 - 路由集中 `router/index.ts`，lazy import，`meta.requiresAuth` 鉴权，kebab-case
-- Tailwind v4 优先、`:deep()` 穿透、Mobile 优先断点（sm → md）；样式数值**必须**通过 `templates/ui/tokens.css` 暴露的 CSS 变量或 Tailwind 语义类，禁止行内 hex / 魔法数字
+- Tailwind v4 优先、`:deep()` 穿透、Mobile 优先断点（sm → md）；样式数值**必须**通过 `.harness/framework/templates/ui/tokens.css` 暴露的 CSS 变量或 Tailwind 语义类，禁止行内 hex / 魔法数字
 
 ## 命名规范
 

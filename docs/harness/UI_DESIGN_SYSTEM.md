@@ -9,9 +9,9 @@
 **目标**：所有基于 Harness 的项目（H5 微站、Dashboard、Admin、Marketing Site）在视觉风格、组件行为、技术栈上保持一致；新项目零思考即可对齐基线。
 
 **产出物**：本文为只读规范。落地资源参见：
-- `templates/ui/tokens.css`（CSS 变量 — HTML 原型 + 应用入口共用）
-- `templates/ui/app.css`（应用 CSS 入口 — Tailwind v4 + tokens）
-- `templates/ui/prototype-base.html`（HTML 原型基础模板）
+- `.harness/framework/templates/ui/tokens.css`（CSS 变量 — HTML 原型 + 应用入口共用）
+- `.harness/framework/templates/ui/app.css`（应用 CSS 入口 — Tailwind v4 + tokens）
+- `.harness/framework/templates/ui/prototype-base.html`（HTML 原型基础模板）
 
 ---
 
@@ -39,7 +39,7 @@
 
 ## 2. 设计 Token
 
-> 所有视觉数值**必须**通过 token 表达，禁止在组件中写魔法数字。token 定义于 `templates/ui/tokens.css`，作为 CSS 变量暴露；Tailwind v4 通过 `@theme` 引用同名变量。
+> 所有视觉数值**必须**通过 token 表达，禁止在组件中写魔法数字。token 定义于 `.harness/framework/templates/ui/tokens.css`，作为 CSS 变量暴露；Tailwind v4 通过 `@theme` 引用同名变量。
 
 ### 2.1 颜色
 
@@ -287,14 +287,14 @@ H5 基线：`375px` 竖屏；Dashboard 基线：`1280px`。Mobile First：默认
 `web/src/app.css`：
 ```css
 @import 'tailwindcss';
-@import './tokens.css';      /* 由 Harness 安装：templates/ui/tokens.css */
+@import './tokens.css';      /* 由 Harness 安装：.harness/framework/templates/ui/tokens.css */
 ```
 
 `tailwind.config` 通过 v4 的 `@theme` 块直接引用 CSS 变量，例如 `--color-primary` 自动对应工具类 `bg-primary` / `text-primary`。
 
 ### 8.2 HTML 原型
 
-直接复制 `templates/ui/prototype-base.html`，内联 `tokens.css`，按需添加 section。
+直接复制 `.harness/framework/templates/ui/prototype-base.html`，内联 `tokens.css`，按需添加 section。
 所有原型必须：纯 HTML、单文件、无外网依赖（除 Inter 字体可用 system 兜底）、内含 mobile + desktop 两个断点画板。
 
 ### 8.3 设计文档（design-docs）
@@ -332,5 +332,5 @@ H5 基线：`375px` 竖屏；Dashboard 基线：`1280px`。Mobile First：默认
 - `code` 任务（前端）：`specs-frontend: [CODING_FRONTEND.md, UI_DESIGN_SYSTEM.md]`；acceptance 包含 `node scripts/ui-tokens-lint.mjs --ci`，机械执行 §9 红线（hex / rgb / 裸 palette / 魔法 px）。
 - `code-review` / `product-acceptance`：将 token 使用、状态完备性纳入评分维度（quality-score.mjs Step 6 的 prototype-parity 已隐式覆盖；token-lint 评分维度在 v2 接入）。
 
-**规范更新流程**：本文档（含 §2 token 表 / §5 状态 ID / §1 栈基线）的任何修改需走"规范更新"任务，同时变更 `templates/ui/tokens.css` 与本文档；变更后 `install.sh` 运行将携带新版本进入下游项目。
+**规范更新流程**：本文档（含 §2 token 表 / §5 状态 ID / §1 栈基线）的任何修改需走"规范更新"任务，同时变更 `.harness/framework/templates/ui/tokens.css` 与本文档；变更后 `install.sh` 运行将携带新版本进入下游项目。
 

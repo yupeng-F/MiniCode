@@ -39,7 +39,7 @@ function runtimeTemplatePath(entry) {
 }
 
 function load() {
-  if (!existsSync(PATH)) fatal(`未找到 ${PATH}（参考 config/deploy.yml.example 或 docs/CICD.md）`);
+  if (!existsSync(PATH)) fatal(`未找到 ${PATH}（参考 config/deploy.yml.example 或 docs/harness/CICD.md）`);
   const cfg = loadEnvironmentsCompat();
   if (cfg?.version !== 1) fatal(`${PATH}: version 必须为 1`);
   return cfg;
@@ -229,7 +229,7 @@ Harness Env Check
   env-check.mjs check <env>
   env-check.mjs print <env>
 
-详见 docs/CICD.md。
+详见 docs/harness/CICD.md。
 `);
 }
 

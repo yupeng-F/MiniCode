@@ -1,7 +1,7 @@
 # 发布规范（v1.6 兼容说明）
 
 > v1.6 起不再存在独立 `release` 任务，也不再使用 `harness-release` Agent。
-> 发布被拆成 deploy-sprint 中的结构化任务，并由主 Agent 按 `docs/SPRINT.md`
+> 发布被拆成 deploy-sprint 中的结构化任务，并由主 Agent 按 `docs/harness/SPRINT.md`
 > 和 `lint/task-rules.yml` 编排。
 
 ## 当前发布任务链
@@ -22,9 +22,9 @@
 
 | 内容 | 真源 |
 |---|---|
-| 发布任务流 | `docs/SPRINT.md` |
+| 发布任务流 | `docs/harness/SPRINT.md` |
 | 任务类型、门控、产出物、验收条件 | `lint/task-rules.yml` |
-| CI/CD 红线、分支/环境策略、故障速查 | `docs/CICD.md` |
+| CI/CD 红线、分支/环境策略、故障速查 | `docs/harness/CICD.md` |
 | 部署环境与 secret 声明 | `config/deploy.yml` |
 
 如果历史 Sprint 计划仍包含 `release` 任务，应迁移为上述任务链。

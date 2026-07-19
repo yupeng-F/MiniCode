@@ -1,5 +1,5 @@
 # walkthrough-checks.yml — 产品走查 4 维结构化检查清单
-# 对应规范：docs/PRODUCT_ACCEPTANCE.md 走查维度章节。
+# 对应规范：docs/harness/PRODUCT_ACCEPTANCE.md 走查维度章节。
 # 消费者：acceptance-record.mjs（生成指南 / 计分）、harness-review 子 Agent。
 # 修改此文件即修改走查标准，无需改脚本。
 
@@ -12,7 +12,7 @@ version: "1.0"
 dimensions:
   F:
     label: "PRD 功能符合性"
-    spec: "docs/PRODUCT_ACCEPTANCE.md"
+    spec: "docs/harness/PRODUCT_ACCEPTANCE.md"
     checks:
       - { id: "F-01", title: "主路径完整", criterion: "按 PRD 用户流程逐步执行无阻断", default: major }
       - { id: "F-02", title: "异常路径覆盖", criterion: "异常态有处理，不白屏不卡死", default: major }
@@ -25,7 +25,7 @@ dimensions:
 
   U:
     label: "UI 设计符合性"
-    spec: "docs/DESIGN.md"
+    spec: "docs/harness/DESIGN.md"
     checks:
       - { id: "U-01", title: "页面流完整", criterion: "所有页面已实现，导航路径与设计一致", default: major }
       - { id: "U-02", title: "视觉层级", criterion: "信息层级与设计一致", default: minor }
@@ -38,7 +38,7 @@ dimensions:
 
   P:
     label: "产品主张符合性"
-    spec: "docs/PRODUCT_SENSE.md"
+    spec: "docs/harness/PRODUCT_SENSE.md"
     scoring: "每条主张独立评分，≥ 4/5 通过；总体 ≥ 4/5 视为达标"
     checks:
       - { id: "P-1", title: "速度是功能", criterion: "P99 < 8s、LCP < 2s、交互反馈 < 100ms、乐观更新", default: major }
@@ -49,7 +49,7 @@ dimensions:
 
   X:
     label: "用户体验符合性"
-    spec: "docs/PRODUCT_SENSE.md"
+    spec: "docs/harness/PRODUCT_SENSE.md"
     checks:
       - { id: "X-01", title: "S0 标题即价值", criterion: "0-3s 首屏标题传达价值", default: minor }
       - { id: "X-02", title: "S1 示例可见", criterion: "3-15s 示例输入 + 预期结果可见", default: minor }

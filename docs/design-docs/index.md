@@ -2,7 +2,7 @@
 
 > ⚠️ **MAI-Harness 框架文件** — 请勿在项目中修改。如需变更请在框架工程中修改并覆盖到此项目。
 
-> UI 设计与原型设计文档索引。设计规范见 [../DESIGN.md](../DESIGN.md)。
+> UI 设计与原型设计文档索引。设计规范见 [../harness/DESIGN.md](../harness/DESIGN.md)。
 > 技术方案文档见 [../tech-docs/index.md](../tech-docs/index.md)。
 
 ## 设计文档列表

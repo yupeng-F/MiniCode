@@ -18,7 +18,7 @@
 //   // token-lint-disable-next-line   下一行豁免
 //   行尾注释 token-lint-disable-line  当行豁免
 //
-// 默认豁免目录: templates/ui, tokens.css 自身, node_modules, dist, build
+// 默认豁免目录: .harness/framework/templates/ui, tokens.css 自身, node_modules, dist, build
 // =============================================================================
 
 import {
@@ -187,7 +187,7 @@ if (violations.length > 0) {
     if (list.length > head.length) console.log(`  ... 还有 ${list.length - head.length} 项`);
   }
   console.log();
-  console.log(`参见 docs/UI_DESIGN_SYSTEM.md §9 红线、§2 Token 表`);
+  console.log(`参见 docs/harness/UI_DESIGN_SYSTEM.md §9 红线、§2 Token 表`);
 }
 
 if (REPORT) {

@@ -4,7 +4,7 @@
 // Harness test-case-validator — 测试用例 YAML 字段校验
 //
 // 对 test-cases/**/*.yml 做结构校验，防止字段漂移导致 quality-score.mjs 运行时失败。
-// 规范见 docs/TEST_CASES.md。
+// 规范见 docs/harness/TEST_CASES.md。
 //
 // 用法: scripts/test-case-validator.mjs [--dir <path>] [--sprint <N-name>] [--ci]
 //   --dir     测试用例目录（默认 test-cases/）

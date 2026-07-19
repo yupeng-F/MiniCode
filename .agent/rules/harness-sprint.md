@@ -16,7 +16,7 @@ tools: ["*"]
 
 1. 读取 `AGENTS.md`（知识地图）+ `USER_STORIES.md` + `ARCHITECTURE.md`
 2. 读取 `lint/task-rules.yml` 获取任务类型定义、门控级别、派生规则
-3. 参考 `docs/SPRINT.md` 分析需求，创建/更新 Sprint 计划
+3. 参考 `docs/harness/SPRINT.md` 分析需求，创建/更新 Sprint 计划
 4. 按任务依赖顺序，使用 `define_subagent` 和 `invoke_subagent` 逐任务启动子 Agent 执行
 
 ## 双重角色

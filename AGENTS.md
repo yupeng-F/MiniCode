@@ -124,22 +124,22 @@ src/minicode/
 
 | 我要做什么 | 先读 | 再读 |
 |-----------|------|------|
-| 规划迭代 / 拆分任务 | `docs/SPRINT.md` | `USER_STORIES.md` |
-| 产品设计 / PRD | `docs/PRODUCT_SENSE.md` | `USER_STORIES.md` |
-| UI 设计 | `docs/DESIGN.md` | `docs/UI_DESIGN_SYSTEM.md` + 关联 PRD |
-| 后端技术方案 | `docs/TECH_BACKEND.md` | `ARCHITECTURE.md` |
-| 前端技术方案 | `docs/TECH_FRONTEND.md` | `docs/UI_DESIGN_SYSTEM.md` + `ARCHITECTURE.md` |
-| 后端编码 | `docs/CODING_BACKEND.md` | `PROJECT_RULES.md` + 技术方案 |
-| 前端编码 | `docs/CODING_FRONTEND.md` | `docs/UI_DESIGN_SYSTEM.md` + `PROJECT_RULES.md` + 技术方案 |
-| 代码评审 | `docs/CODE_REVIEW.md` | `PROJECT_RULES.md` |
-| 测试质量评分 | `docs/QUALITY_SCORE.md` | `PROJECT_RULES.md` |
-| 产品走查 | `docs/PRODUCT_ACCEPTANCE.md` | PRD + 设计文档 |
-| **Sprint / deploy-sprint 流程** | **`docs/SPRINT.md`** | `lint/task-rules.yml` + `config/harness.yml` |
-| **CI/CD 红线 / 分支模型** | **`docs/CICD.md`** | `config/deploy.yml` |
-| deploy-sprint（test/prod） | `docs/SPRINT.md` | `docs/RELEASE.md` + `config/deploy.yml` |
-| 数据库迁移 | `docs/MIGRATION.md` | `templates/migration/` |
-| Secrets 管理 | `docs/SECRETS.md` | `config/deploy.yml` |
-| 线上观测 | `docs/OBSERVABILITY.md` | `templates/observability/` |
+| 规划迭代 / 拆分任务 | `docs/harness/SPRINT.md` | `USER_STORIES.md` |
+| 产品设计 / PRD | `docs/harness/PRODUCT_SENSE.md` | `USER_STORIES.md` |
+| UI 设计 | `docs/harness/DESIGN.md` | `docs/harness/UI_DESIGN_SYSTEM.md` + 关联 PRD |
+| 后端技术方案 | `docs/harness/TECH_BACKEND.md` | `ARCHITECTURE.md` |
+| 前端技术方案 | `docs/harness/TECH_FRONTEND.md` | `docs/harness/UI_DESIGN_SYSTEM.md` + `ARCHITECTURE.md` |
+| 后端编码 | `docs/harness/CODING_BACKEND.md` | `PROJECT_RULES.md` + 技术方案 |
+| 前端编码 | `docs/harness/CODING_FRONTEND.md` | `docs/harness/UI_DESIGN_SYSTEM.md` + `PROJECT_RULES.md` + 技术方案 |
+| 代码评审 | `docs/harness/CODE_REVIEW.md` | `PROJECT_RULES.md` |
+| 测试质量评分 | `docs/harness/QUALITY_SCORE.md` | `PROJECT_RULES.md` |
+| 产品走查 | `docs/harness/PRODUCT_ACCEPTANCE.md` | PRD + 设计文档 |
+| **Sprint / deploy-sprint 流程** | **`docs/harness/SPRINT.md`** | `lint/task-rules.yml` + `config/harness.yml` |
+| **CI/CD 红线 / 分支模型** | **`docs/harness/CICD.md`** | `config/deploy.yml` |
+| deploy-sprint（test/prod） | `docs/harness/SPRINT.md` | `docs/harness/RELEASE.md` + `config/deploy.yml` |
+| 数据库迁移 | `docs/harness/MIGRATION.md` | `.harness/framework/templates/migration/` |
+| Secrets 管理 | `docs/harness/SECRETS.md` | `config/deploy.yml` |
+| 线上观测 | `docs/harness/OBSERVABILITY.md` | `.harness/framework/templates/observability/` |
 
 ## 知识库索引
 
@@ -160,8 +160,8 @@ config/harness.yml          # Harness 项目级行为配置（走查环境、质
 config/deploy.yml           # 发布环境与部署配置
 .harness/state/             # 环境锁、promotion 日志、框架运行状态
 deploy/                     # test/prod 部署生成产物
-templates/migration/        # DB migration 模板（脚本 readFileSync）
-templates/observability/    # PromQL / LogQL 可执行查询
+.harness/framework/templates/migration/        # DB migration 模板（脚本 readFileSync）
+.harness/framework/templates/observability/    # PromQL / LogQL 可执行查询
 ```
 
 <!-- harness:framework-map:end -->

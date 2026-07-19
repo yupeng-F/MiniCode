@@ -52,7 +52,7 @@ if (!existsSync(SPRINT_FILE)) {
 const content = readText(SPRINT_FILE);
 const lines = content.split('\n');
 
-// Sprint 计划的任务状态支持两种格式（见 docs/SPRINT.md）：
+// Sprint 计划的任务状态支持两种格式（见 docs/harness/SPRINT.md）：
 //   A) 表格行:      | <id> | <type> | ... | <状态> |   — 末列为状态
 //   B) 键值对行:    - [-] <task>: ... (status: done)   — 或 `状态：done`
 // 命中任一格式即改写为 rollback。

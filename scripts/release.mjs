@@ -7,6 +7,7 @@
 
 import { info, ok, err, fatal, warn, run, tryRun, runCapture, existsSync, mkdirSync, readText, writeText, join } from './lib/utils.mjs';
 import { readFileSync } from 'node:fs';
+import { HARNESS_PATHS } from '../config/harness-paths.mjs';
 
 const RELEASE_ASSET_ROOT = 'deploy/release';
 
@@ -151,11 +152,11 @@ function scaffold(version, args = {}) {
   }
 
   if (!existsSync(notes)) {
-    const tpl = loadTemplateOrDefault('templates/release-notes.md', DEFAULT_RELEASE_NOTES_TEMPLATE).replace(/vX\.Y\.Z/g, version);
+    const tpl = loadTemplateOrDefault(join(HARNESS_PATHS.templates, 'release-notes.md'), DEFAULT_RELEASE_NOTES_TEMPLATE).replace(/vX\.Y\.Z/g, version);
     writeText(notes, tpl);
   }
   if (!existsSync(manifest)) {
-    const tpl = loadTemplateOrDefault('templates/migration/manifest.yml.tpl', DEFAULT_MIGRATION_MANIFEST_TEMPLATE).replace(/vX\.Y\.Z/g, version);
+    const tpl = loadTemplateOrDefault(join(HARNESS_PATHS.templates, 'migration/manifest.yml.tpl'), DEFAULT_MIGRATION_MANIFEST_TEMPLATE).replace(/vX\.Y\.Z/g, version);
     writeText(manifest, tpl);
   }
   ok(`${root} 骨架就绪`);
@@ -309,7 +310,7 @@ Harness Release — Release 编排
   release.mjs approve <vX.Y.Z> [--by Boss] [--summary "..."] [--reject] [--dry-run]
   release.mjs archive <vX.Y.Z> [--dry-run]
 
-  详见 docs/SPRINT.md 与 lint/task-rules.yml。
+  详见 docs/harness/SPRINT.md 与 lint/task-rules.yml。
 `);
 }
 

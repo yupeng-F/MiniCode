@@ -3,10 +3,10 @@
 > Sprint 生命周期、Agent 编排架构、任务流转和发布编排。
 >
 > **单一真源边界**：
-> - `docs/SPRINT.md`：Sprint / deploy-sprint 的流程与编排协议
+> - `docs/harness/SPRINT.md`：Sprint / deploy-sprint 的流程与编排协议
 > - `lint/task-rules.yml`：任务类型、工具边界、门控、产出物、验收条件、派生规则（机械执行真源）
 > - `config/harness.yml`：项目级流程开关（走查环境、质量阈值、部署模式、UI L3）
-> - `docs/CICD.md`：CI/CD why-only 红线、分支/环境策略、故障速查；不定义 Sprint 流程
+> - `docs/harness/CICD.md`：CI/CD why-only 红线、分支/环境策略、故障速查；不定义 Sprint 流程
 
 **核心原则：Sprint = PR 级别交付单元。** 每个 Sprint 聚焦单一可交付增量，粒度对齐一个 PR。
 
@@ -303,7 +303,7 @@ Hotfix 是线上事故专项 Sprint，允许创建 hotfix worktree，但仍复�
 
 ## CI/CD 与发布编排
 
-> 发布任务已经并入 Sprint 编排。`docs/CICD.md` 只解释 CI/CD 红线和策略，不再定义独立流程。
+> 发布任务已经并入 Sprint 编排。`docs/harness/CICD.md` 只解释 CI/CD 红线和策略，不再定义独立流程。
 
 ### Sprint 类型（H-OPT v1.6）
 

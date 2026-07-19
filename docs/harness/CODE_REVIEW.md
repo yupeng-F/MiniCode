@@ -1,7 +1,7 @@
 # Code Review
 
 > 代码评审规范。专用于 `review` 任务类型。
-> 编码规范见 [../PROJECT_RULES.md](../PROJECT_RULES.md)，后端约束见 [CODING_BACKEND.md](CODING_BACKEND.md)。
+> 编码规范见 [../../PROJECT_RULES.md](../../PROJECT_RULES.md)，后端约束见 [CODING_BACKEND.md](CODING_BACKEND.md)。
 
 **产出物**：`docs/review-reports/sprint-N-review.md`（须更新 `index.md`）
 

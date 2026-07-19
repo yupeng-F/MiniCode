@@ -129,7 +129,7 @@ Harness Promote — Test 提升
   promote.mjs test [--sprints a,b] [--train] [--source-ref origin/develop] [--dry-run]
   promote.mjs status
 
-详见 docs/CICD.md。
+详见 docs/harness/CICD.md。
 `);
 }
 

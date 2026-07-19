@@ -103,7 +103,7 @@ Harness Hotfix
   hotfix.mjs init <issue-id> --severity p0|p1 [--from-tag vX.Y.Z]
   hotfix.mjs back-merge <issue-id>
 
-详见 docs/CICD.md。
+详见 docs/harness/CICD.md。
 `);
 }
 

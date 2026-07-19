@@ -2,7 +2,7 @@
 
 > ⚠️ **MAI-Harness 框架文件** — 请勿在项目中修改。如需变更请在框架工程中修改并覆盖到此项目。
 
-> 按 Sprint 归档的产品走查报告，格式遵循 `docs/PRODUCT_ACCEPTANCE.md` 走查规范。
+> 按 Sprint 归档的产品走查报告，格式遵循 `docs/harness/PRODUCT_ACCEPTANCE.md` 走查规范。
 
 | Sprint | 报告路径 | 结论 | 走查日期 | 验证状态 |
 |--------|---------|------|---------|---------|

@@ -1,6 +1,6 @@
 /* =============================================================================
  * Harness UI Tokens — Single Source of Truth
- * 规范见 docs/UI_DESIGN_SYSTEM.md
+ * 规范见 docs/harness/UI_DESIGN_SYSTEM.md
  *
  * 用法：
  *   1) 应用入口：在 app.css 中 `@import './tokens.css';`，配合 Tailwind v4 `@theme`

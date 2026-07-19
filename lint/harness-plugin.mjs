@@ -100,12 +100,12 @@ export default {
             '{{ currentLayer }} 层不允许导入 {{ importLayer }} 层。' +
             '允许的依赖：{{ allowed }}。' +
             '请将此逻辑移至正确层级，或通过 providers/ 接口解耦。' +
-            '参考 docs/CODING_BACKEND.md §分层设计 / PROJECT_RULES.md §后端 #8-#10。',
+            '参考 docs/harness/CODING_BACKEND.md §分层设计 / PROJECT_RULES.md §后端 #8-#10。',
           httpInService:
             'Service 层禁止导入 HTTP 模块「{{ source }}」。' +
             'Service 只处理业务逻辑，不感知传输层（Request/Response）。' +
             '请将 HTTP 操作移至 Controller 层，Service 通过参数接收纯数据。' +
-            '参考 docs/CODING_BACKEND.md §分层设计 / PROJECT_RULES.md §后端 #9。',
+            '参考 docs/harness/CODING_BACKEND.md §分层设计 / PROJECT_RULES.md §后端 #9。',
         },
         schema: [],
       },
@@ -156,7 +156,7 @@ export default {
           secretDetected:
             '检测到疑似硬编码的{{ type }}。禁止将密钥提交到代码仓库。' +
             '请通过环境变量注入（process.env.XXX），并在 .env.example 中添加占位符（无真实值）。' +
-            '参考 docs/CODING_BACKEND.md §密钥管理 / PROJECT_RULES.md §Key Rules #4。',
+            '参考 docs/harness/CODING_BACKEND.md §密钥管理 / PROJECT_RULES.md §Key Rules #4。',
         },
         schema: [],
       },
@@ -188,7 +188,7 @@ export default {
           sqlConcat:
             '检测到 SQL 字符串拼接，存在 SQL 注入风险。' +
             '数据库查询必须使用 ORM 参数化查询（如 Drizzle/Prisma），禁止字符串拼接 SQL。' +
-            '参考 docs/CODING_BACKEND.md §数据安全 / PROJECT_RULES.md §Key Rules #6。',
+            '参考 docs/harness/CODING_BACKEND.md §数据安全 / PROJECT_RULES.md §Key Rules #6。',
         },
         schema: [],
       },
@@ -233,7 +233,7 @@ export default {
           magicNumber:
             '硬编码数字 {{ value }} 应提取为命名常量。' +
             '业务阈值、配置值应集中到 config/ 或 shared/constants。' +
-            '参考 docs/GOLDEN_RULES.md §G-3。',
+            '参考 docs/harness/GOLDEN_RULES.md §G-3。',
         },
         schema: [{
           type: 'object',
@@ -308,7 +308,7 @@ export default {
           helperOutsideShared:
             '文件名「{{ filename }}」匹配工具函数模式（util/helper/common），但不在 shared/ 目录下。' +
             '请将公共工具函数提取到 shared/ 目录，避免跨模块重复。' +
-            '参考 docs/GOLDEN_RULES.md §G-1。',
+            '参考 docs/harness/GOLDEN_RULES.md §G-1。',
         },
         schema: [{
           type: 'object',
@@ -358,7 +358,7 @@ export default {
           directCli:
             '检测到直接调用 {{ tool }} 操作 PR/MR：「{{ snippet }}」。' +
             '请改为 `scripts/pr-adapter.mjs create|status|merge|comment`，以兼容 GitHub 与 GitLab。' +
-            '参考 docs/CICD.md。',
+            '参考 docs/harness/CICD.md。',
         },
         schema: [],
       },

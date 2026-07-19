@@ -1,5 +1,5 @@
 {
-  "_doc": "<project> GitHub branch protection (template; copied from imchat Sprint 10 T-02 hardening). Stable contexts align with docs/CICD.md and Sprint 10 T-02.",
+  "_doc": "<project> GitHub branch protection (template; copied from imchat Sprint 10 T-02 hardening). Stable contexts align with docs/harness/CICD.md and Sprint 10 T-02.",
   "rules": {
     "develop": {
       "required_status_checks": {

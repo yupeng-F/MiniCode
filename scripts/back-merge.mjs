@@ -66,7 +66,7 @@ Harness Back-Merge
 
   back-merge.mjs --from <branch> --to <a,b,...> [--reason <text>] [--dry-run]
 
-详见 docs/CICD.md。
+详见 docs/harness/CICD.md。
 `);
 }
 

@@ -4,7 +4,7 @@
 > 代码评审见 [CODE_REVIEW.md](CODE_REVIEW.md)。
 >
 > `quality` 任务入口、评分权重与 case 归因以 `scripts/quality-score.mjs` 为可执行真源。
-> L1/L2/L3 的触发点与任务流由 `docs/SPRINT.md` + `lint/task-rules.yml` 决定。
+> L1/L2/L3 的触发点与任务流由 `docs/harness/SPRINT.md` + `lint/task-rules.yml` 决定。
 
 **产出物**：`docs/test-reports/sprint-N-quality.md`（须更新 `index.md`）
 

@@ -1,7 +1,7 @@
 # Product Sense
 
 > 面向资深产品经理的产品 Taste 与决策规范。专用于 `product` 任务类型。
-> 业务目标、用户画像与 Roadmap 见 [USER_STORIES.md](../USER_STORIES.md)。
+> 业务目标、用户画像与 Roadmap 见 [USER_STORIES.md](../../USER_STORIES.md)。
 
 **产出物**：PRD 保存至 `docs/product-specs/[feature-slug].md`（须更新 `index.md`，关联 User Story ID）
 

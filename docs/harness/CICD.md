@@ -1,6 +1,6 @@
 # CI/CD 设计规范
 
-> **入门 / 流程 / 编排** 见 `docs/SPRINT.md` § CI/CD 与发布编排
+> **入门 / 流程 / 编排** 见 `docs/harness/SPRINT.md` § CI/CD 与发布编排
 > **脚本用法** 见 `scripts/<name>.mjs --help`
 > **分支保护** 见 `.gitlab/protected-branches.yml`（GitLab 权威）+ `.github/branch-protection.json`（仓级硬约束）
 > **环境矩阵** 见 `config/deploy.yml`（v1.6 起合并 environments + build-targets）

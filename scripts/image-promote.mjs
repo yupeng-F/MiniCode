@@ -141,7 +141,7 @@ Harness Image Promote — Build Once Deploy Many
   image-promote.mjs --from <tag> --to <tag> [--registry <url>] [--dry-run]
   image-promote.mjs --force-rebuild --hotfix <issue-id> --tag <tag>
 
-详见 docs/CICD.md。
+详见 docs/harness/CICD.md。
 `);
 }
 

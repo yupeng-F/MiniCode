@@ -129,7 +129,7 @@ Harness Secrets Scan
   secrets-scan.mjs check-cross-env
   secrets-scan.mjs vcs-cli-scan [--root <dir>]
 
-详见 docs/SECRETS.md。
+详见 docs/harness/SECRETS.md。
 `);
 }
 

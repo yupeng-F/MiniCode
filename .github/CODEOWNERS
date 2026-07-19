@@ -1,5 +1,5 @@
 # Harness Engineering — CODEOWNERS（GitHub）
-# 本文件由 docs/CICD.md §16 定义，分支保护强制 reviewer 检查。
+# 本文件由 docs/harness/CICD.md §16 定义，分支保护强制 reviewer 检查。
 # 项目按团队结构调整 @ 用户/团队名。
 
 /release/         @release-managers
@@ -10,7 +10,7 @@
 /.gitlab/         @release-managers
 /lint/            @release-managers
 /scripts/         @release-managers
-/docs/CICD.md     @release-managers
-/docs/MIGRATION.md @dba @release-managers
-/docs/SECRETS.md  @sre @release-managers
-/docs/OBSERVABILITY.md @sre
+/docs/harness/CICD.md     @release-managers
+/docs/harness/MIGRATION.md @dba @release-managers
+/docs/harness/SECRETS.md  @sre @release-managers
+/docs/harness/OBSERVABILITY.md @sre

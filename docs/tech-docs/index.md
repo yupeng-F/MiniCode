@@ -3,7 +3,7 @@
 > ⚠️ **MAI-Harness 框架文件** — 请勿在项目中修改。如需变更请在框架工程中修改并覆盖到此项目。
 
 > 技术方案文档索引。所有 AI 生成的技术方案文档保存于此目录。
-> 技术方案须关联对应的 User Story（见 [/USER_STORIES.md](/USER_STORIES.md)）。
+> 技术方案须关联对应的 User Story（见 [../../USER_STORIES.md](../../USER_STORIES.md)）。
 
 ## 文档规范
 

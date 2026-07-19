@@ -3,7 +3,7 @@
 # 本文件合并自 v1.5 时代的 config/environments.yml + config/build-targets.yml
 # 用法：cp config/deploy.yml.example config/deploy.yml 后按项目实际填写
 #
-# ⚠️ 不要把真实密钥提交到仓库（参见 docs/SECRETS.md）。本文件仅声明拓扑、项目额外
+# ⚠️ 不要把真实密钥提交到仓库（参见 docs/harness/SECRETS.md）。本文件仅声明拓扑、项目额外
 #    secret 名字、构建目标。运行时唯一真源是 .harness/secrets/<env>.sh；deploy /
 #    env-check / promote-prep 都直接读取该 shell 文件。
 #
