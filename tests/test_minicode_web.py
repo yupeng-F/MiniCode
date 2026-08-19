@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from minicode.engine.model_client import JsonScriptModel
 from minicode.interfaces.web.server import app
+from minicode.memory.memory_service import MemoryService
 
 
 def test_web_index_reports_architecture():
@@ -106,3 +107,26 @@ def test_web_browses_directories_and_reads_project_files_in_pages(tmp_path: Path
     assert first_page.json()["next_offset"] == 2
     assert second_page.json()["content"] == "three"
     assert second_page.json()["next_offset"] is None
+
+
+def test_web_manages_project_memory(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    memory = MemoryService(workspace / ".minicode" / "memory")
+    assert memory.store_rule("tests", "Always run pytest.")
+    memory_id = memory.list_memories()[0].id
+
+    listed = client.get(f"/api/projects/{project['project_id']}/memories")
+    disabled = client.patch(
+        f"/api/projects/{project['project_id']}/memories/{memory_id}",
+        json={"enabled": False},
+    )
+    deleted = client.delete(f"/api/projects/{project['project_id']}/memories/{memory_id}")
+
+    assert listed.status_code == 200
+    assert listed.json()[0]["content"] == "Always run pytest."
+    assert disabled.json()["status"] == "disabled"
+    assert deleted.status_code == 204
