@@ -54,6 +54,13 @@ class ApprovalRequest(BaseModel):
     decision: str
 
 
+class MemoryUpdateRequest(BaseModel):
+    name: str | None = None
+    content: str | None = None
+    paths: list[str] | None = None
+    enabled: bool | None = None
+
+
 def _global_store() -> GlobalStore:
     configured_path = getattr(app.state, "global_store_path", None)
     if configured_path is not None:
@@ -68,6 +75,45 @@ def _project_service() -> ProjectService:
 
 def _session_service() -> SessionService:
     return SessionService(_global_store())
+
+
+def _restore_run(run_id: str) -> dict | None:
+    """Lazily reconstruct a persisted run after a daemon restart."""
+    store = _global_store()
+    persisted = store.load_run(run_id)
+    if persisted is None:
+        return None
+    session, project_id, status = persisted
+    workspace = WorkspaceManager(session.workspace)
+    if status == "approval_executing":
+        # The daemon may have stopped after the side effect but before recording
+        # its result. Never retry this claim automatically: that is the durable
+        # at-most-once boundary.
+        session.status = "failed"
+        session.final_answer = "Daemon restarted while an approved tool call was executing; it was not retried."
+        status = "failed"
+        store.save_run(project_id, session)
+        store.save_session(project_id, session)
+        store.append_event(Event(type="run_failed", run_id=run_id, summary=session.final_answer))
+    run = {
+        "session": session,
+        "events": queue.Queue(),
+        "status": status,
+        "workspace": workspace,
+        "project_id": project_id,
+    }
+    _runs[run_id] = run
+    return run
+
+
+def _get_run(run_id: str) -> dict | None:
+    return _runs.get(run_id) or _restore_run(run_id)
+
+
+def _persist_run(project_id: str, session: SessionState, status: str | None = None) -> None:
+    store = _global_store()
+    store.save_run(project_id, session, status)
+    store.save_session(project_id, session)
 
 
 def _project_workspace(project_id: str) -> WorkspaceManager:
@@ -181,6 +227,41 @@ async def read_project_file(project_id: str, path: str, offset: int = 0, limit: 
     })
 
 
+def _project_memory(project_id: str) -> MemoryService:
+    workspace = _project_workspace(project_id)
+    return MemoryService(workspace.root / ".minicode" / "memory")
+
+
+@app.get("/api/projects/{project_id}/memories")
+async def list_project_memories(project_id: str) -> JSONResponse:
+    return JSONResponse([
+        {"id": item.id, "name": item.name, "status": item.status, "content": item.content,
+         "category": item.category, "metadata": item.metadata}
+        for item in _project_memory(project_id).list_memories()
+    ])
+
+
+@app.patch("/api/projects/{project_id}/memories/{memory_id}")
+async def update_project_memory(project_id: str, memory_id: str, req: MemoryUpdateRequest) -> JSONResponse:
+    memory = _project_memory(project_id)
+    if req.enabled is False:
+        changed = memory.disable_memory(memory_id)
+    else:
+        changed = memory.update_memory(memory_id, content=req.content, name=req.name, paths=req.paths)
+    if not changed:
+        raise HTTPException(status_code=404, detail="Memory not found or update rejected")
+    item = memory.get_memory(memory_id)
+    return JSONResponse({"id": item.id, "name": item.name, "status": item.status, "content": item.content,
+                         "category": item.category, "metadata": item.metadata})
+
+
+@app.delete("/api/projects/{project_id}/memories/{memory_id}", status_code=204)
+async def delete_project_memory(project_id: str, memory_id: str) -> Response:
+    if not _project_memory(project_id).delete_memory(memory_id):
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return Response(status_code=204)
+
+
 @app.get("/api/projects/{project_id}/sessions")
 async def list_sessions(project_id: str) -> JSONResponse:
     if _project_service().get_project(project_id) is None:
@@ -209,10 +290,7 @@ async def get_session(session_id: str) -> JSONResponse:
 
 @app.delete("/api/sessions/{session_id}", status_code=204)
 async def delete_session(session_id: str) -> Response:
-    if any(
-        run["session"].session_id == session_id and run["session"].status in {"running", "waiting_approval"}
-        for run in _runs.values()
-    ):
+    if _global_store().active_run_for_session(session_id):
         raise HTTPException(status_code=409, detail="Session has an active run")
     if not _session_service().delete(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
@@ -232,10 +310,7 @@ async def create_run(req: RunRequest) -> JSONResponse:
         project = projects.get_project_by_workspace(existing.workspace)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found for session")
-        if any(
-            run["session"].session_id == req.session_id and run["session"].status in {"running", "waiting_approval"}
-            for run in _runs.values()
-        ):
+        if sessions.store.active_run_for_session(req.session_id):
             raise HTTPException(status_code=409, detail="Session already has an active run")
         session = sessions.start_run(req.session_id, req.input, req.mode)
         workspace = WorkspaceManager(session.workspace)
@@ -256,6 +331,7 @@ async def create_run(req: RunRequest) -> JSONResponse:
         "workspace": workspace,
         "project_id": project.project_id,
     }
+    _persist_run(project.project_id, session, "running")
 
     threading.Thread(
         target=_run_background,
@@ -268,14 +344,16 @@ async def create_run(req: RunRequest) -> JSONResponse:
 
 @app.post("/api/runs/{run_id}/approval")
 async def resolve_approval(run_id: str, req: ApprovalRequest) -> JSONResponse:
-    run = _runs.get(run_id)
+    run = _get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     if run["session"].status != "waiting_approval":
         raise HTTPException(status_code=409, detail="Run is not waiting for approval")
     if req.decision not in {"approve", "reject"}:
         raise HTTPException(status_code=400, detail="Decision must be approve or reject")
-    run["status"] = "running"
+    if not _global_store().claim_approval(run_id):
+        raise HTTPException(status_code=409, detail="Approval was already claimed")
+    run["status"] = "approval_executing"
     threading.Thread(
         target=_resolve_approval_background,
         args=(run_id, req.decision == "approve"),
@@ -286,7 +364,7 @@ async def resolve_approval(run_id: str, req: ApprovalRequest) -> JSONResponse:
 
 @app.get("/api/runs/{run_id}")
 async def get_run(run_id: str) -> JSONResponse:
-    run = _runs.get(run_id)
+    run = _get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     session: SessionState = run["session"]
@@ -295,27 +373,36 @@ async def get_run(run_id: str) -> JSONResponse:
 
 @app.get("/api/runs/{run_id}/stream")
 async def stream_run(run_id: str) -> StreamingResponse:
-    run = _runs.get(run_id)
+    run = _get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     events: queue.Queue = run["events"]
 
     async def event_generator():
+        last_event_id = 0
         while True:
+            persisted = _global_store().list_events(run_id, last_event_id)
+            if persisted:
+                for event_id, event in persisted:
+                    last_event_id = event_id
+                    yield f"data: {json.dumps(event.model_dump(), ensure_ascii=False)}\n\n"
+                if persisted[-1][1].type in {"run_completed", "run_failed", "approval_required"}:
+                    break
+                continue
             try:
-                event = await asyncio.get_event_loop().run_in_executor(None, lambda: events.get(timeout=30))
+                await asyncio.get_event_loop().run_in_executor(None, lambda: events.get(timeout=1))
             except queue.Empty:
                 yield "data: {\"type\":\"ping\"}\n\n"
                 continue
-            yield f"data: {json.dumps(event.model_dump(), ensure_ascii=False)}\n\n"
-            if event.type in {"run_completed", "run_failed", "approval_required"}:
-                break
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 def _run_background(session: SessionState, workspace: WorkspaceManager, events: queue.Queue, project_id: str) -> None:
     def sink(event: Event) -> None:
+        # Event and run checkpoints are committed before they are exposed to SSE.
+        _persist_run(project_id, session)
+        _global_store().append_event(event)
         events.put(event)
 
     try:
@@ -325,20 +412,20 @@ def _run_background(session: SessionState, workspace: WorkspaceManager, events: 
         registry = build_default_registry()
         artifacts = ArtifactStore(workspace.root / ".minicode")
         memory = MemoryService(workspace.root / ".minicode" / "memory")
-        runtime = HarnessRuntime(registry, PolicyEngine(), ToolExecutor(workspace, artifacts))
+        runtime = HarnessRuntime(registry, PolicyEngine(), ToolExecutor(workspace, artifacts, task_agent_model=model))
         loop = QueryLoop(model, runtime, ContextManager(memory_service=memory), memory, sink)
         result = loop.run(session)
         SQLiteStore(workspace.root / ".minicode" / "state.db").save_session(result)
-        _session_service().save(project_id, result)
+        _persist_run(project_id, result)
         _runs[session.run_id]["session"] = result
         _runs[session.run_id]["status"] = result.status
     except Exception as exc:
         session.status = "failed"
         session.final_answer = str(exc)
-        _session_service().save(project_id, session)
+        _persist_run(project_id, session)
         _runs[session.run_id]["session"] = session
         _runs[session.run_id]["status"] = "failed"
-        events.put(Event(type="run_failed", run_id=session.run_id, summary=str(exc)))
+        sink(Event(type="run_failed", run_id=session.run_id, summary=str(exc)))
 
 
 def _resolve_approval_background(run_id: str, approved: bool) -> None:
@@ -349,27 +436,37 @@ def _resolve_approval_background(run_id: str, approved: bool) -> None:
     project_id: str = run["project_id"]
 
     def sink(event: Event) -> None:
+        # Keep the durable claim while the approved side effect is in flight.
+        # Persisting the still-waiting SessionState as the run status here would
+        # reopen the approval race before resume_approved clears the pending call.
+        _persist_run(project_id, session, "approval_executing")
+        _global_store().append_event(event)
         events.put(event)
 
     try:
-        model = run["model"]
+        model = run.get("model")
+        if model is None:
+            model_factory = getattr(app.state, "model_factory", ModelFactory.from_environment)
+            model = model_factory()
         registry = build_default_registry()
         artifacts = ArtifactStore(workspace.root / ".minicode")
         memory = MemoryService(workspace.root / ".minicode" / "memory")
-        runtime = HarnessRuntime(registry, PolicyEngine(), ToolExecutor(workspace, artifacts))
+        runtime = HarnessRuntime(registry, PolicyEngine(), ToolExecutor(workspace, artifacts, task_agent_model=model))
         loop = QueryLoop(model, runtime, ContextManager(memory_service=memory), memory, sink)
         result = loop.resume_approved(session) if approved else loop.reject_pending(session)
         SQLiteStore(workspace.root / ".minicode" / "state.db").save_session(result)
-        _session_service().save(project_id, result)
+        _persist_run(project_id, result)
         run["session"] = result
         run["status"] = result.status
     except Exception as exc:
         session.status = "failed"
         session.final_answer = str(exc)
-        _session_service().save(project_id, session)
+        _persist_run(project_id, session)
         run["session"] = session
         run["status"] = "failed"
-        events.put(Event(type="run_failed", run_id=run_id, summary=str(exc)))
+        event = Event(type="run_failed", run_id=run_id, summary=str(exc))
+        _global_store().append_event(event)
+        events.put(event)
 
 
 def main() -> None:

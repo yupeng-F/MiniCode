@@ -21,9 +21,10 @@ class RunService:
         registry = build_default_registry()
         artifacts = ArtifactStore(self.workspace.root / ".minicode")
         memory = MemoryService(self.workspace.root / ".minicode" / "memory")
-        executor = ToolExecutor(self.workspace, artifacts)
+        selected_model = model or JsonScriptModel()
+        executor = ToolExecutor(self.workspace, artifacts, task_agent_model=selected_model)
         runtime = HarnessRuntime(registry, PolicyEngine(), executor)
-        self.loop = QueryLoop(model or JsonScriptModel(), runtime, ContextManager(memory_service=memory), memory)
+        self.loop = QueryLoop(selected_model, runtime, ContextManager(memory_service=memory), memory)
 
     def run(self, prompt: str, mode: str = "act") -> SessionState:
         session = SessionState(workspace=str(self.workspace.root), mode=mode, task=prompt)

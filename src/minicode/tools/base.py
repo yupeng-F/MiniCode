@@ -29,6 +29,18 @@ def build_default_registry() -> ToolRegistry:
     ))
     registry.register(ToolSpec(name="git_status", description="Show git status."))
     registry.register(ToolSpec(name="git_diff", description="Show git diff."))
+    registry.register(ToolSpec(
+        name="task_agent",
+        description="Delegate a bounded, read-only repository exploration or review to an isolated sub-agent.",
+        input_schema=_schema({
+            "task": _string("Focused question for the sub-agent"),
+            "role": {"type": "string", "enum": ["explorer", "reviewer"], "description": "Read-only specialist role"},
+            "max_steps": _integer("Maximum model turns (1-12, default 8)"),
+            "max_tool_calls": _integer("Maximum tool executions (1-10, default 6)"),
+        }, ["task", "role"]),
+        read_only=True,
+        allowed_roles=["assistant"],
+    ))
     registry.register(ToolSpec(name="run_tests", description="Run the project test command.", input_schema=_schema({"command": _string("Optional test command")}), side_effect=False, read_only=True))
     registry.register(ToolSpec(
         name="propose_patch",

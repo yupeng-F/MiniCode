@@ -1,19 +1,19 @@
 # MiniCode Productization Implementation Plan
 
-> **Status (2026-07-17):** The migration from the legacy `multi_agents / LangGraph` prototype to the `minicode` architecture is complete. This document remains the productization roadmap; unchecked items such as controlled SubAgents, durable audit/evaluation, and restart-safe approval recovery are not part of the completed migration claim.
+> **Status (2026-08-19):** The architecture migration and the next reliability tranche are complete. Runs and events survive daemon restarts, approval claims are atomic and at-most-once, read-only controlled SubAgents are available, and append-only observability plus governed Markdown memory have executable baselines. Remaining work is deeper product UX and release hardening.
 
 ## Progress Snapshot
 
 | Milestone | Status | Current result |
 |---|---|---|
 | 1. DeepSeek tool calling | Complete | Environment-based model factory, OpenAI-compatible tools, native assistant/tool history, CLI and daemon wiring, provider tests. |
-| 2. Project/session/run lifecycle | Usable baseline | Persistent project/session index, independent run IDs, project/session deletion, polling, approval and resume. Restart-safe active runs, cancel, rename/archive and persisted events remain. |
-| 3. Context/artifacts/memory | Usable baseline | Bounded recent tool output, paged reads, compaction, project-isolated Markdown rules, sensitive filtering and verified automatic captures. Candidate promotion, contradiction audit and management UI remain. |
-| 4. Controlled SubAgent | Not started | `task_agent` and isolated explorer/reviewer runtimes remain planned. |
-| 5. Three-pane web client | Usable baseline | React/Vite project and session navigation, file browser/viewer, tool timeline, approval controls and deletion. SSE-first state, full diff/plan/artifact views and responsive drawers remain. |
-| 6. Observability/evaluation | Planned | Regression tests exist, but durable trace/audit/eval modules and release scenarios remain. |
+| 2. Project/session/run lifecycle | Complete reliability baseline | SQLite run checkpoints and ordered events, restart recovery, SSE replay, atomic approval claim and conservative crash handling guarantee that side effects are never automatically retried. Cancel and rename/archive remain UX enhancements. |
+| 3. Context/artifacts/memory | Product baseline | Bounded context, artifacts, sensitive filtering, candidates, deterministic deduplication, promotion, conflict replacement, disable/delete governance and a Web memory surface are implemented. Rich editing and audit visualization remain. |
+| 4. Controlled SubAgent | Complete read-only baseline | `task_agent` provides isolated, budgeted explorer/reviewer runtimes with role-specific read-only allowlists and structured results. Write-capable delegation remains intentionally excluded. |
+| 5. Three-pane web client | Product baseline | Project/session recovery, file viewer, tool timeline, persisted approval controls, Diff/Plan/output and Memory tabs plus frontend API regression tests are present. Rich artifact rendering and responsive drawers remain. |
+| 6. Observability/evaluation | Executable baseline | Fsync append-only trace/audit storage, recursive sensitive-data scrubbing and repeatable JSON eval cases/reports with a CLI are implemented. Release scenario coverage remains. |
 
-**Migration gate:** complete. **Productization gate:** in progress. The checklists below remain acceptance criteria and are intentionally not marked complete when only a baseline subset exists.
+**Migration gate:** complete. **Reliability gate:** complete baseline. **Productization gate:** in progress. The checklists below remain the detailed acceptance criteria and historical delivery plan.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

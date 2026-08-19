@@ -1,11 +1,12 @@
 export type Project = { project_id: string; workspace: string; title: string };
-export type Session = { session_id: string; run_id: string; workspace: string; task: string; mode: string; status: string; messages: Message[]; tool_calls: ToolCall[]; active_files: string[]; final_answer: string };
+export type Session = { session_id: string; run_id: string; workspace: string; task: string; mode: string; status: string; messages: Message[]; tool_calls: ToolCall[]; active_files: string[]; plan: string[]; memory_refs: string[]; final_answer: string };
 export type SessionSummary = { session_id: string; project_id: string; title: string; status: string; updated_at: string };
 export type Message = { role: string; content: string };
 export type ToolCall = { tool_name: string; status: string; result?: { summary: string; preview: string } };
 export type DirectoryEntry = { name: string; path: string; is_dir: boolean };
 export type DirectoryListing = { path: string; parent: string; entries: DirectoryEntry[] };
 export type FilePage = { path: string; content: string; offset: number; total_lines: number; next_offset: number | null };
+export type MemoryRecord = { id: string; name: string; status: string; content: string; category: string; metadata: Record<string, string> };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });
@@ -21,6 +22,9 @@ export const api = {
   browseDirectories: (path?: string) => request<DirectoryListing>(`/api/filesystem/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   listFiles: (projectId: string, path = ".") => request<DirectoryListing>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`),
   readFile: (projectId: string, path: string, offset = 0, limit = 400) => request<FilePage>(`/api/projects/${projectId}/files/content?path=${encodeURIComponent(path)}&offset=${offset}&limit=${limit}`),
+  listMemories: (projectId: string) => request<MemoryRecord[]>(`/api/projects/${projectId}/memories`),
+  updateMemory: (projectId: string, memoryId: string, update: { name?: string; content?: string; paths?: string[]; enabled?: boolean }) => request<MemoryRecord>(`/api/projects/${projectId}/memories/${memoryId}`, { method: "PATCH", body: JSON.stringify(update) }),
+  deleteMemory: (projectId: string, memoryId: string) => request<void>(`/api/projects/${projectId}/memories/${memoryId}`, { method: "DELETE" }),
   listSessions: (projectId: string) => request<SessionSummary[]>(`/api/projects/${projectId}/sessions`),
   createSession: (projectId: string, input: string, mode: string) => request<Session>(`/api/projects/${projectId}/sessions`, { method: "POST", body: JSON.stringify({ input, mode }) }),
   getSession: (sessionId: string) => request<Session>(`/api/sessions/${sessionId}`),
