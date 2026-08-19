@@ -5,6 +5,7 @@ import time
 from collections.abc import Callable
 
 from minicode.context.artifact_store import ArtifactStore
+from minicode.engine.model_client import ModelClient
 from minicode.runtime.workspace_manager import WorkspaceManager
 from minicode.schemas.tool import ToolCall, ToolResult
 from minicode.tools.edit_tools import apply_patch_tool, propose_patch_tool
@@ -17,9 +18,10 @@ ToolHandler = Callable[[ToolCall, WorkspaceManager, ArtifactStore, str], ToolRes
 
 
 class ToolExecutor:
-    def __init__(self, workspace: WorkspaceManager, artifacts: ArtifactStore | None = None) -> None:
+    def __init__(self, workspace: WorkspaceManager, artifacts: ArtifactStore | None = None, task_agent_model: ModelClient | None = None) -> None:
         self.workspace = workspace
         self.artifacts = artifacts or ArtifactStore(workspace.root / ".minicode")
+        self.task_agent_model = task_agent_model
         self.handlers: dict[str, ToolHandler] = {
             "read_file": read_file_tool,
             "list_directory": list_directory_tool,
@@ -31,6 +33,7 @@ class ToolExecutor:
             "git_status": git_status_tool,
             "git_diff": git_diff_tool,
             "bash": self._bash,
+            "task_agent": self._task_agent,
         }
 
     def execute(self, call: ToolCall, run_id: str) -> ToolResult:
@@ -63,3 +66,17 @@ class ToolExecutor:
             exit_code=proc.returncode,
             duration_ms=duration_ms,
         )
+
+    def _task_agent(self, call: ToolCall, workspace: WorkspaceManager, artifacts: ArtifactStore, run_id: str) -> ToolResult:
+        if self.task_agent_model is None:
+            return ToolResult(
+                call_id=call.call_id,
+                tool_name="task_agent",
+                success=False,
+                summary="Task agent is unavailable because no model was configured.",
+                exit_code=1,
+            )
+        # Lazy import prevents the nested runtime from introducing an executor/query-loop cycle.
+        from minicode.tools.task_agent import run_task_agent
+
+        return run_task_agent(call, workspace, artifacts, run_id, self.task_agent_model)

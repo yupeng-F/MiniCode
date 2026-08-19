@@ -28,6 +28,7 @@ class QueryLoop:
         max_identical_read_calls: int = 3,
         max_duplicate_recovery_warnings: int = 2,
         max_post_write_inspections: int = 4,
+        role: str = "assistant",
     ) -> None:
         self.model = model
         self.runtime = runtime
@@ -38,6 +39,7 @@ class QueryLoop:
         self.max_identical_read_calls = max_identical_read_calls
         self.max_duplicate_recovery_warnings = max_duplicate_recovery_warnings
         self.max_post_write_inspections = max_post_write_inspections
+        self.role = role
 
     def run(self, session: SessionState) -> SessionState:
         session.status = "running"
@@ -48,7 +50,7 @@ class QueryLoop:
         self.event_sink(Event(type="run_started", run_id=session.run_id, summary=session.task))
 
         for _ in range(self.max_steps):
-            visible = self.runtime.registry.visible_tools(session.mode)
+            visible = self.runtime.registry.visible_tools(session.mode, self.role)
             use_native_history = self.model.supports_native_tool_history
             context = self.context_manager.build(
                 session,
@@ -74,6 +76,7 @@ class QueryLoop:
 
             call = response.tool_call
             call.mode = session.mode
+            call.role = self.role
             if self._repeated_read_only_call(session, call.tool_name, call.arguments):
                 warning_count = self._consecutive_duplicate_warnings(session, call.tool_name, call.arguments)
                 if warning_count >= self.max_duplicate_recovery_warnings:

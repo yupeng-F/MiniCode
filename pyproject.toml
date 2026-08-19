@@ -20,6 +20,7 @@ dev = [
 [project.scripts]
 minicode = "minicode.interfaces.cli:main"
 minicode-web = "minicode.interfaces.web.server:main"
+minicode-eval = "minicode.observability.eval_runner:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
