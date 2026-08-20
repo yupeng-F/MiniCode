@@ -6,15 +6,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from minicode.memory.markdown_memory import MarkdownMemory
+from minicode.memory.memory_index import KeywordMemory, MemoryIndex
 from minicode.memory.sensitive_data_filter import SensitiveDataFilter
 
 
 class MemoryService:
-    """Project-local Markdown memory with bounded, path-aware retrieval."""
+    """项目本地 Markdown 记忆，以及有界、路径感知的检索。"""
 
     def __init__(self, root: str | Path) -> None:
         self.store = MarkdownMemory(root)
         self.filter = SensitiveDataFilter()
+        project_source = str(self.store.root.parent.resolve())
+        self.project_id = hashlib.sha256(project_source.encode("utf-8")).hexdigest()[:16]
+        self.keyword_index = MemoryIndex(self.store.root / "memory_index.db", self.project_id)
+        self._rebuild_keyword_index()
 
     def index(self) -> str:
         return self.filter.sanitize(self.store.read_index())
@@ -33,6 +38,7 @@ class MemoryService:
             frontmatter.append("paths: " + ", ".join(paths))
         frontmatter.extend(["---", "", content.strip(), ""])
         self.store.add("rules", name, "\n".join(frontmatter))
+        self._rebuild_keyword_index()
         return True
 
     def propose_candidate(self, name: str, content: str, paths: list[str] | None = None, source: str = "agent") -> str | None:
@@ -131,6 +137,7 @@ class MemoryService:
     def _write(self, category: str, memory_id: str, metadata: dict[str, str], content: str) -> None:
         header = ["---", *[f"{key}: {value}" for key, value in metadata.items()], "---", "", content.strip(), ""]
         self.store.add(category, memory_id, "\n".join(header))
+        self._rebuild_keyword_index()
 
     def _rebuild_index(self) -> None:
         lines = ["# Memory Index", ""]
@@ -139,17 +146,42 @@ class MemoryService:
             if directory.exists():
                 lines.extend(f"- [{category}/{path.stem}](./{category}/{path.name})" for path in sorted(directory.glob("*.md")))
         self.store.index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rebuild_keyword_index()
 
-    def retrieve(self, task: str, active_files: list[str], max_chars: int = 3_000) -> str:
+    def _rebuild_keyword_index(self) -> None:
+        records = [
+            KeywordMemory(
+                memory_id=item.id,
+                document=" ".join([
+                    item.name,
+                    item.content,
+                    item.metadata.get("paths", ""),
+                    item.metadata.get("source", ""),
+                ]),
+            )
+            for item in self.list_memories("enabled")
+            if item.category == "rules"
+        ]
+        self.keyword_index.rebuild(records)
+
+    def retrieve(
+        self,
+        task: str,
+        active_files: list[str],
+        mode: str = "act",
+        max_chars: int = 3_000,
+    ) -> str:
         selected: list[str] = []
         budget = max_chars
-        for path in sorted((self.store.root / "rules").glob("*.md")) if (self.store.root / "rules").exists() else []:
-            metadata, content = _parse_memory_file(path.read_text(encoding="utf-8"))
-            if metadata.get("status", "enabled") != "enabled":
+        query = " ".join([task, mode, *active_files])
+        records = {item.id: item for item in self.list_memories("enabled") if item.category == "rules"}
+        for memory_id in self.keyword_index.search(query, limit=30):
+            record = records.get(memory_id)
+            if record is None:
                 continue
-            if not _matches_paths(metadata.get("paths", ""), active_files):
+            if not _matches_paths(record.metadata.get("paths", ""), active_files):
                 continue
-            safe_content = self.filter.sanitize(content).strip()
+            safe_content = self.filter.sanitize(record.content).strip()
             if not safe_content or len(safe_content) > budget:
                 continue
             selected.append(f"- {safe_content}")

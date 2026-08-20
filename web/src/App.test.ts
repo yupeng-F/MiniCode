@@ -62,3 +62,18 @@ describe("输入 Token 提示", () => {
     expect(estimateComposerTokens?.("abcdefgh")).toBe(3);
   });
 });
+
+describe("项目切换状态", () => {
+  const shouldResetConversation = (AppModule as unknown as {
+    shouldResetConversation?: (currentWorkspace: string | undefined, nextWorkspace: string) => boolean;
+  }).shouldResetConversation;
+
+  it("切换到不同工作区时清空旧会话", () => {
+    expect(typeof shouldResetConversation).toBe("function");
+    expect(shouldResetConversation?.("/project-a", "/project-b")).toBe(true);
+  });
+
+  it("重新选择同一工作区时保留会话", () => {
+    expect(shouldResetConversation?.("/project-a", "/project-a")).toBe(false);
+  });
+});

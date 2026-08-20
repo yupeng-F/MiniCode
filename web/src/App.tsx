@@ -28,6 +28,10 @@ export function estimateComposerTokens(content: string): number {
   return Math.ceil((cjkCount + Math.ceil(nonCjkCount / 4)) * 1.1);
 }
 
+export function shouldResetConversation(currentWorkspace: string | undefined, nextWorkspace: string): boolean {
+  return currentWorkspace !== undefined && currentWorkspace !== nextWorkspace;
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
@@ -103,7 +107,21 @@ export function App() {
   const showProjectPicker = () => { setDialog("project"); void browse(); };
   const openProject = async () => {
     if (!browser) return;
-    try { const next = await api.createProject(browser.path); setProject(next); setDialog(null); setBrowser(null); setError(""); await refreshProjects(); } catch (err) { report(err); }
+    try {
+      const next = await api.createProject(browser.path);
+      if (shouldResetConversation(project?.workspace, next.workspace)) {
+        sessionRequest.current += 1;
+        window.localStorage.removeItem(lastSessionKey);
+        setSession(null);
+        setSessions([]);
+        setActiveRun(null);
+      }
+      setProject(next);
+      setDialog(null);
+      setBrowser(null);
+      setError("");
+      await refreshProjects();
+    } catch (err) { report(err); }
   };
   const selectProject = (item: Project) => {
     sessionRequest.current += 1;
