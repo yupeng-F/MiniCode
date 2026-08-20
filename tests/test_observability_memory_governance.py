@@ -113,6 +113,28 @@ def test_run_summary_is_idempotent_and_contains_only_bounded_conclusions(tmp_pat
     assert len(summaries[0].content) < 1_500
 
 
+def test_medium_memory_update_and_disable_survive_reload(tmp_path):
+    root = tmp_path / "memory"
+    memory = MemoryService(root)
+    session = SessionState(
+        run_id="run-summary-edit",
+        task="旧任务",
+        status="completed",
+        final_answer="旧摘要",
+    )
+    assert memory.store_run_summary(session)
+    assert memory.update_memory(session.run_id, name="新任务", content="新摘要")
+    assert memory.disable_memory(session.run_id)
+
+    reloaded = MemoryService(root)
+    record = reloaded.get_memory(session.run_id)
+    assert record is not None
+    assert record.name == "新任务"
+    assert record.content == "新摘要"
+    assert record.status == "disabled"
+    assert reloaded.retrieve("新摘要", []) == ""
+
+
 def test_medium_memory_retention_expires_old_items_caps_count_and_protects_pinned(tmp_path):
     memory = MemoryService(tmp_path / "memory")
     now = datetime(2026, 8, 20, tzinfo=UTC)

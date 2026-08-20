@@ -27,6 +27,7 @@ class MediumMemory:
     last_used_at: str
     use_count: int = 0
     pinned: bool = False
+    enabled: bool = True
 
 
 class MemoryIndex:
@@ -52,8 +53,12 @@ class MemoryIndex:
                 "memory_id TEXT NOT NULL, project_id TEXT NOT NULL, task TEXT NOT NULL, "
                 "status TEXT NOT NULL, content TEXT NOT NULL, active_files TEXT NOT NULL, "
                 "created_at TEXT NOT NULL, last_used_at TEXT NOT NULL, use_count INTEGER NOT NULL DEFAULT 0, "
-                "pinned INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(memory_id, project_id))"
+                "pinned INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, "
+                "PRIMARY KEY(memory_id, project_id))"
             )
+            columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(medium_memory)")}
+            if "enabled" not in columns:
+                conn.execute("ALTER TABLE medium_memory ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
 
     def rebuild(self, records: list[KeywordMemory]) -> None:
         with self._connect() as conn:
@@ -84,11 +89,11 @@ class MemoryIndex:
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO medium_memory(memory_id, project_id, task, status, content, active_files, "
-                "created_at, last_used_at, use_count, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "created_at, last_used_at, use_count, pinned, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(memory_id, project_id) DO UPDATE SET "
                 "task=excluded.task, status=excluded.status, content=excluded.content, "
                 "active_files=excluded.active_files, last_used_at=excluded.last_used_at, "
-                "use_count=excluded.use_count, pinned=excluded.pinned",
+                "use_count=excluded.use_count, pinned=excluded.pinned, enabled=excluded.enabled",
                 (
                     record.memory_id,
                     self.project_id,
@@ -100,14 +105,51 @@ class MemoryIndex:
                     record.last_used_at,
                     record.use_count,
                     int(record.pinned),
+                    int(record.enabled),
                 ),
             )
+
+    def update_medium(
+        self,
+        memory_id: str,
+        *,
+        task: str | None = None,
+        content: str | None = None,
+        active_files: str | None = None,
+        enabled: bool | None = None,
+    ) -> bool:
+        fields: list[str] = []
+        values: list[str | int] = []
+        if task is not None:
+            fields.append("task = ?")
+            values.append(task)
+        if content is not None:
+            fields.append("content = ?")
+            values.append(content)
+        if active_files is not None:
+            fields.append("active_files = ?")
+            values.append(active_files)
+        if enabled is not None:
+            fields.append("enabled = ?")
+            values.append(int(enabled))
+        with self._connect() as conn:
+            if not fields:
+                row = conn.execute(
+                    "SELECT 1 FROM medium_memory WHERE memory_id = ? AND project_id = ?",
+                    (memory_id, self.project_id),
+                ).fetchone()
+                return row is not None
+            result = conn.execute(
+                f"UPDATE medium_memory SET {', '.join(fields)} WHERE memory_id = ? AND project_id = ?",
+                (*values, memory_id, self.project_id),
+            )
+        return result.rowcount > 0
 
     def list_medium(self) -> list[MediumMemory]:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT memory_id, task, status, content, active_files, created_at, last_used_at, "
-                "use_count, pinned FROM medium_memory WHERE project_id = ? ORDER BY created_at DESC",
+                "use_count, pinned, enabled FROM medium_memory WHERE project_id = ? ORDER BY created_at DESC",
                 (self.project_id,),
             ).fetchall()
         return [
@@ -121,6 +163,7 @@ class MemoryIndex:
                 last_used_at=str(row[6]),
                 use_count=int(row[7]),
                 pinned=bool(row[8]),
+                enabled=bool(row[9]),
             )
             for row in rows
         ]

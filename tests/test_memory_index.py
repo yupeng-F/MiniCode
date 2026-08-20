@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
+
+from minicode.memory.memory_index import MemoryIndex
 from minicode.memory.memory_service import MemoryService
 
 
@@ -31,3 +34,29 @@ def test_disabled_memory_is_removed_from_keyword_results(tmp_path):
     assert memory.disable_memory("harness")
 
     assert memory.retrieve("Harness 安全策略", [], mode="review") == ""
+
+
+def test_medium_memory_migrates_legacy_table_and_updates_only_explicit_fields(tmp_path):
+    path = tmp_path / "memory_index.db"
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "CREATE TABLE medium_memory ("
+            "memory_id TEXT NOT NULL, project_id TEXT NOT NULL, task TEXT NOT NULL, "
+            "status TEXT NOT NULL, content TEXT NOT NULL, active_files TEXT NOT NULL, "
+            "created_at TEXT NOT NULL, last_used_at TEXT NOT NULL, use_count INTEGER NOT NULL DEFAULT 0, "
+            "pinned INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(memory_id, project_id))"
+        )
+        conn.execute(
+            "INSERT INTO medium_memory VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("legacy", "project-a", "旧任务", "completed", "旧摘要", "src/old.py", "created", "used", 2, 0),
+        )
+
+    index = MemoryIndex(path, "project-a")
+
+    assert index.update_medium("legacy", content="新摘要", enabled=False)
+    reloaded = MemoryIndex(path, "project-a").list_medium()[0]
+    assert reloaded.task == "旧任务"
+    assert reloaded.content == "新摘要"
+    assert reloaded.active_files == "src/old.py"
+    assert reloaded.status == "completed"
+    assert reloaded.enabled is False

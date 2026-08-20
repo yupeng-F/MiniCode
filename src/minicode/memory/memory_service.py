@@ -94,9 +94,10 @@ class MemoryService:
                 if status is None or record.status == status:
                     records.append(record)
         for item in self.keyword_index.list_medium():
+            memory_status = "enabled" if item.enabled else "disabled"
             metadata = {
                 "name": item.task,
-                "status": "enabled",
+                "status": memory_status,
                 "run_status": item.status,
                 "tier": "medium",
                 "kind": "summary",
@@ -107,7 +108,7 @@ class MemoryService:
                 "pinned": str(item.pinned).lower(),
                 "source": "run_summary",
             }
-            record = MemoryRecord(item.memory_id, item.task, "enabled", item.content, "summaries", metadata)
+            record = MemoryRecord(item.memory_id, item.task, memory_status, item.content, "summaries", metadata)
             if status is None or record.status == status:
                 records.append(record)
         return records
@@ -147,6 +148,16 @@ class MemoryService:
         new_content = content if content is not None else record.content
         if self.filter.contains_sensitive(new_content) or not new_content.strip():
             return False
+        if record.category == "summaries":
+            updated = self.keyword_index.update_medium(
+                record.id,
+                task=name,
+                content=content,
+                active_files=", ".join(paths) if paths is not None else None,
+            )
+            if updated:
+                self._rebuild_keyword_index()
+            return updated
         metadata = dict(record.metadata)
         if name is not None:
             metadata["name"] = name
@@ -159,6 +170,11 @@ class MemoryService:
         record = self.get_memory(memory_id)
         if record is None:
             return False
+        if record.category == "summaries":
+            disabled = self.keyword_index.update_medium(record.id, enabled=False)
+            if disabled:
+                self._rebuild_keyword_index()
+            return disabled
         metadata = dict(record.metadata)
         metadata["status"] = "disabled"
         if superseded_by:
