@@ -59,6 +59,15 @@ class QueryLoop:
             )
             session.context_usage = {**projection.usage, "total": projection.total_tokens}
             session.context_dropped = list(projection.dropped)
+            self.event_sink(Event(
+                type="context_built",
+                run_id=session.run_id,
+                summary=f"模型上下文共 {projection.total_tokens} tokens",
+                payload={
+                    "usage": dict(session.context_usage),
+                    "dropped": list(session.context_dropped),
+                },
+            ))
             response = self.model.complete(
                 projection.render(),
                 tool_specs_for_model(visible),

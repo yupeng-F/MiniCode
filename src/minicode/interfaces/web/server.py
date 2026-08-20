@@ -15,6 +15,8 @@ from minicode.application.project_service import ProjectService
 from minicode.application.session_service import SessionService
 from minicode.context.artifact_store import ArtifactStore
 from minicode.context.context_manager import ContextManager
+from minicode.context.token_budget import TokenBudget, UserMessageTooLarge
+from minicode.context.token_counter import TokenCounter
 from minicode.engine.model_factory import ModelFactory
 from minicode.engine.query_loop import QueryLoop
 from minicode.memory.memory_service import MemoryService
@@ -75,6 +77,21 @@ def _project_service() -> ProjectService:
 
 def _session_service() -> SessionService:
     return SessionService(_global_store())
+
+
+def _validate_user_input(content: str) -> int:
+    counter = getattr(app.state, "token_counter", None) or TokenCounter()
+    try:
+        return TokenBudget().validate_user_message(content, counter=counter)
+    except UserMessageTooLarge as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "user_message_too_large",
+                "limit": exc.limit,
+                "actual": exc.actual,
+            },
+        ) from exc
 
 
 def _restore_run(run_id: str) -> dict | None:
@@ -271,6 +288,7 @@ async def list_sessions(project_id: str) -> JSONResponse:
 
 @app.post("/api/projects/{project_id}/sessions")
 async def create_session(project_id: str, req: SessionRequest) -> JSONResponse:
+    _validate_user_input(req.input)
     project = _project_service().get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -301,6 +319,7 @@ async def delete_session(session_id: str) -> Response:
 
 @app.post("/api/runs")
 async def create_run(req: RunRequest) -> JSONResponse:
+    _validate_user_input(req.input)
     projects = _project_service()
     sessions = _session_service()
     if req.session_id:

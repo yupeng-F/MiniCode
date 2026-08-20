@@ -76,10 +76,12 @@ def test_daemon_restart_restores_pending_approval_and_executes_it_once(tmp_path:
     assert (workspace / "marker.txt").read_text(encoding="utf-8") == "x"
     assert [event.type for _, event in GlobalStore(server.app.state.global_store_path).list_events(run_id)] == [
         "run_started",
+        "context_built",
         "tool_call_created",
         "approval_required",
         "tool_call_finished",
         "run_started",
+        "context_built",
         "run_completed",
     ]
 

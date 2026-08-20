@@ -9,6 +9,14 @@ from minicode.interfaces.web.server import app
 from minicode.memory.memory_service import MemoryService
 
 
+class FixedTokenCounter:
+    def __init__(self, token_count: int) -> None:
+        self.token_count = token_count
+
+    def count(self, value: object) -> int:
+        return self.token_count
+
+
 def test_web_index_reports_architecture():
     client = TestClient(app)
     response = client.get("/")
@@ -35,6 +43,46 @@ def test_web_creates_project_and_persistent_session(tmp_path: Path):
     assert session_response.status_code == 200
     assert sessions_response.status_code == 200
     assert sessions_response.json()[0]["title"] == "Inspect tests"
+
+
+def test_web_rejects_oversized_input_before_creating_session_or_run(tmp_path: Path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    monkeypatch.setattr(app.state, "token_counter", FixedTokenCounter(12_001), raising=False)
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+
+    session_response = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "超长消息", "mode": "ask"},
+    )
+    run_response = client.post(
+        "/api/runs",
+        json={"workspace": str(workspace), "input": "超长消息", "mode": "ask"},
+    )
+
+    expected = {"code": "user_message_too_large", "limit": 12_000, "actual": 12_001}
+    assert session_response.status_code == 422
+    assert session_response.json()["detail"] == expected
+    assert run_response.status_code == 422
+    assert run_response.json()["detail"] == expected
+
+
+def test_web_accepts_input_at_token_limit(tmp_path: Path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    monkeypatch.setattr(app.state, "token_counter", FixedTokenCounter(12_000), raising=False)
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+
+    response = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "边界消息", "mode": "ask"},
+    )
+
+    assert response.status_code == 200
 
 
 def test_web_reuses_existing_session_when_starting_a_run(tmp_path: Path):
