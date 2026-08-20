@@ -20,6 +20,10 @@ class EmbeddingUnavailable(RuntimeError):
     pass
 
 
+class SensitiveEmbeddingContent(EmbeddingUnavailable):
+    pass
+
+
 class EmbeddingDimensionError(ValueError):
     pass
 
@@ -275,6 +279,9 @@ class EmbeddingRouter:
     ) -> list[list[float]]:
         """使用查询阶段已选定的同一 Provider 生成文档向量，禁止跨维度混用。"""
 
+        if self.remote is not None and identity == self.remote.identity:
+            if any(self.sensitive_filter.contains_sensitive(text) for text in texts):
+                raise SensitiveEmbeddingContent("检测到敏感内容，未发送到远程 embedding")
         for provider in (self.remote, self.local):
             if provider is not None and provider.identity == identity:
                 return provider.embed_documents(texts)

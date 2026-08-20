@@ -188,6 +188,27 @@ def test_memory_service_returns_observable_hybrid_result(tmp_path):
     assert memory.retrieve("如何验证 Python 改动", ["src/app.py"]) == result.rendered
 
 
+def test_lazy_remote_index_skips_sensitive_markdown(tmp_path):
+    memory_root = tmp_path / ".minicode" / "memory"
+    rules = memory_root / "rules"
+    rules.mkdir(parents=True)
+    (rules / "legacy-sensitive.md").write_text(
+        "---\nname: legacy-sensitive\nstatus: enabled\n---\n\nDASHSCOPE_API_KEY=secret\n",
+        encoding="utf-8",
+    )
+    (rules / "ordinary.md").write_text(
+        "---\nname: ordinary\nstatus: enabled\n---\n\n普通规则\n",
+        encoding="utf-8",
+    )
+    remote = FakeEmbeddingRouter()
+    memory = MemoryService(memory_root, embedding_router=remote, vector_store=FakeVectorStore())
+
+    result = memory.retrieve_result("普通查询", [])
+
+    assert remote.document_calls == [["普通规则"]]
+    assert result.provider == "aliyun"
+
+
 def test_memory_service_reports_complete_retrieval_elapsed_time(tmp_path, monkeypatch):
     router = FakeEmbeddingRouter()
     memory = MemoryService(

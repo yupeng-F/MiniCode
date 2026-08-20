@@ -360,6 +360,12 @@ class MemoryService:
             content_hash = hashlib.sha256(record.content.encode("utf-8")).hexdigest()
             if hashes.get(record.id) != content_hash:
                 pending.append((record, content_hash))
+        if embedding.identity.external_transfer:
+            pending = [
+                (record, content_hash)
+                for record, content_hash in pending
+                if not self.filter.contains_sensitive(record.content)
+            ]
         if pending:
             vectors = self.embedding_router.embed_documents(
                 embedding.identity,

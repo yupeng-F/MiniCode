@@ -111,6 +111,17 @@ def test_embedding_router_never_sends_sensitive_content_to_remote():
     assert result.fallback_reason == "检测到敏感内容，未发送到远程 embedding"
 
 
+def test_remote_document_embedding_rejects_sensitive_text():
+    remote = FakeProvider("aliyun", [[0.1] * 1024])
+    local = FakeProvider("local", [[0.2] * 512])
+    router = module.EmbeddingRouter(remote=remote, local=local)
+
+    with pytest.raises(module.SensitiveEmbeddingContent):
+        router.embed_documents(remote.identity, ["DASHSCOPE_API_KEY=secret"])
+
+    assert remote.calls == []
+
+
 def test_embedding_router_reports_unavailable_when_no_provider_can_run():
     router = module.EmbeddingRouter(remote=None, local=None)
 
