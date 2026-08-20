@@ -305,3 +305,34 @@ def test_web_reenables_summary_memory_and_persists_it(tmp_path: Path):
     reloaded = MemoryService(workspace / ".minicode" / "memory")
     assert reloaded.get_memory(session.run_id).status == "enabled"
     assert "恢复后的摘要" in reloaded.retrieve("恢复后的摘要", [])
+
+
+def test_web_combined_memory_edit_and_enable_persists_all_fields(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    memory = MemoryService(workspace / ".minicode" / "memory")
+    assert memory.store_rule("old-name", "old content", paths=["old.py"])
+    memory_id = memory.list_memories()[0].id
+    assert client.patch(
+        f"/api/projects/{project['project_id']}/memories/{memory_id}",
+        json={"enabled": False},
+    ).status_code == 200
+
+    response = client.patch(
+        f"/api/projects/{project['project_id']}/memories/{memory_id}",
+        json={
+            "enabled": True,
+            "name": "new-name",
+            "content": "new content",
+            "paths": ["new.py"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "enabled"
+    assert response.json()["name"] == "new-name"
+    assert response.json()["content"] == "new content"
+    assert response.json()["metadata"]["paths"] == "new.py"
