@@ -1,5 +1,6 @@
 export type Project = { project_id: string; workspace: string; title: string };
-export type Session = { session_id: string; run_id: string; workspace: string; task: string; mode: string; model_id: string; run_model_id: string; status: string; messages: Message[]; tool_calls: ToolCall[]; active_files: string[]; plan: string[]; memory_refs: string[]; context_usage: Record<string, number>; context_dropped: string[]; final_answer: string };
+export type MemoryRetrievalStatus = { provider: string; fallback_reason: string; external_transfer: boolean; token_count: number; item_count: number };
+export type Session = { session_id: string; run_id: string; workspace: string; task: string; mode: string; model_id: string; run_model_id: string; status: string; messages: Message[]; tool_calls: ToolCall[]; active_files: string[]; plan: string[]; memory_refs: string[]; memory_retrieval: MemoryRetrievalStatus; context_usage: Record<string, number>; context_dropped: string[]; final_answer: string };
 export type SessionSummary = { session_id: string; project_id: string; title: string; status: string; model_id: string; updated_at: string };
 export type Message = { role: string; content: string };
 export type ToolCall = { tool_name: string; status: string; result?: { summary: string; preview: string } };
@@ -8,7 +9,8 @@ export type DirectoryListing = { path: string; parent: string; entries: Director
 export type FilePage = { path: string; content: string; offset: number; total_lines: number; next_offset: number | null };
 export type MemoryRecord = { id: string; name: string; status: string; content: string; category: string; metadata: Record<string, string> };
 export type ModelProfile = { id: string; label: string; provider: string; context_window: number; max_output_tokens: number };
-export type Capabilities = { default_model: string; models: ModelProfile[]; token_limits: { input: number; output: number; user_message: number } };
+export type EmbeddingCapabilities = { remote_provider: string; remote_model: string; remote_configured: boolean; external_transfer: boolean; local_provider: string; local_model: string; local_installed: boolean; fallback: string };
+export type Capabilities = { default_model: string; models: ModelProfile[]; token_limits: { input: number; output: number; user_message: number }; embedding: EmbeddingCapabilities };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });

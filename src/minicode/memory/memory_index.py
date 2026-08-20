@@ -16,6 +16,19 @@ class KeywordMemory:
     document: str
 
 
+@dataclass(frozen=True, slots=True)
+class MediumMemory:
+    memory_id: str
+    task: str
+    status: str
+    content: str
+    active_files: str
+    created_at: str
+    last_used_at: str
+    use_count: int = 0
+    pinned: bool = False
+
+
 class MemoryIndex:
     """项目本地、可由 Markdown 完整重建的 FTS5 关键词索引。"""
 
@@ -33,6 +46,13 @@ class MemoryIndex:
             conn.execute(
                 "CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5("
                 "memory_id UNINDEXED, project_id UNINDEXED, document, tokenize='unicode61')"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS medium_memory ("
+                "memory_id TEXT NOT NULL, project_id TEXT NOT NULL, task TEXT NOT NULL, "
+                "status TEXT NOT NULL, content TEXT NOT NULL, active_files TEXT NOT NULL, "
+                "created_at TEXT NOT NULL, last_used_at TEXT NOT NULL, use_count INTEGER NOT NULL DEFAULT 0, "
+                "pinned INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(memory_id, project_id))"
             )
 
     def rebuild(self, records: list[KeywordMemory]) -> None:
@@ -59,6 +79,72 @@ class MemoryIndex:
                 (expression, self.project_id, limit),
             ).fetchall()
         return [str(row[0]) for row in rows]
+
+    def upsert_medium(self, record: MediumMemory) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO medium_memory(memory_id, project_id, task, status, content, active_files, "
+                "created_at, last_used_at, use_count, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(memory_id, project_id) DO UPDATE SET "
+                "task=excluded.task, status=excluded.status, content=excluded.content, "
+                "active_files=excluded.active_files, last_used_at=excluded.last_used_at, "
+                "use_count=excluded.use_count, pinned=excluded.pinned",
+                (
+                    record.memory_id,
+                    self.project_id,
+                    record.task,
+                    record.status,
+                    record.content,
+                    record.active_files,
+                    record.created_at,
+                    record.last_used_at,
+                    record.use_count,
+                    int(record.pinned),
+                ),
+            )
+
+    def list_medium(self) -> list[MediumMemory]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT memory_id, task, status, content, active_files, created_at, last_used_at, "
+                "use_count, pinned FROM medium_memory WHERE project_id = ? ORDER BY created_at DESC",
+                (self.project_id,),
+            ).fetchall()
+        return [
+            MediumMemory(
+                memory_id=str(row[0]),
+                task=str(row[1]),
+                status=str(row[2]),
+                content=str(row[3]),
+                active_files=str(row[4]),
+                created_at=str(row[5]),
+                last_used_at=str(row[6]),
+                use_count=int(row[7]),
+                pinned=bool(row[8]),
+            )
+            for row in rows
+        ]
+
+    def delete_medium(self, memory_ids: list[str]) -> None:
+        if not memory_ids:
+            return
+        placeholders = ",".join("?" for _ in memory_ids)
+        with self._connect() as conn:
+            conn.execute(
+                f"DELETE FROM medium_memory WHERE project_id = ? AND memory_id IN ({placeholders})",
+                (self.project_id, *memory_ids),
+            )
+
+    def touch_medium(self, memory_ids: list[str], used_at: str) -> None:
+        if not memory_ids:
+            return
+        placeholders = ",".join("?" for _ in memory_ids)
+        with self._connect() as conn:
+            conn.execute(
+                f"UPDATE medium_memory SET last_used_at = ?, use_count = use_count + 1 "
+                f"WHERE project_id = ? AND memory_id IN ({placeholders})",
+                (used_at, self.project_id, *memory_ids),
+            )
 
 
 def tokenize_terms(text: str) -> list[str]:

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronRight, CirclePlus, FileCode2, Folder, FolderOpen, PanelRight, RefreshCw, Send, ShieldCheck, Terminal, Trash2, Wrench, X } from "lucide-react";
-import { api, type Capabilities, type DirectoryEntry, type DirectoryListing, type FilePage, type MemoryRecord, type Message, type Project, type Session, type SessionSummary } from "./api";
+import { api, type Capabilities, type DirectoryEntry, type DirectoryListing, type FilePage, type MemoryRecord, type MemoryRetrievalStatus, type Message, type Project, type Session, type SessionSummary } from "./api";
 
 const modes = ["ask", "plan", "act", "review"];
 type ActiveRun = { runId: string; sessionId: string; projectId: string };
@@ -30,6 +30,14 @@ export function estimateComposerTokens(content: string): number {
 
 export function shouldResetConversation(currentWorkspace: string | undefined, nextWorkspace: string): boolean {
   return currentWorkspace !== undefined && currentWorkspace !== nextWorkspace;
+}
+
+export function embeddingStatusLabel(status?: Pick<MemoryRetrievalStatus, "provider" | "external_transfer" | "fallback_reason">): string {
+  if (!status?.provider) return "";
+  const reason = status.fallback_reason ? `（${status.fallback_reason}）` : "";
+  if (status.provider === "aliyun") return `阿里云 embedding${status.external_transfer ? " · 内容已发送到阿里云" : ""}${reason}`;
+  if (status.provider === "local") return `本地 embedding${reason}`;
+  return `关键词检索${reason}`;
 }
 
 export function App() {
@@ -208,6 +216,7 @@ export function App() {
       <header className="toolbar"><div><span className="status-light" data-running={Boolean(activeRun)}/>{session ? session.task : "选择项目并创建会话"}</div><select aria-label="选择模型" value={modelId} disabled={Boolean(activeRun)} onChange={event => void selectModel(event.target.value)}>{(capabilities?.models ?? [{ id: "deepseek-v4-flash", label: "DeepSeek V4 Flash（快速）" }]).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><select aria-label="选择模式" value={mode} onChange={event => setMode(event.target.value)}>{modes.map(item => <option key={item}>{item}</option>)}</select></header>
       <div className="timeline">
         {error && <div className="error"><X size={15}/><span>{error}</span><button title="关闭错误" onClick={() => setError("")}><X size={14}/></button></div>}
+        {embeddingStatusLabel(session?.memory_retrieval) && <div className={`embedding-status ${session?.memory_retrieval?.provider ?? ""}`} role="status">{embeddingStatusLabel(session?.memory_retrieval)}</div>}
         {!session && <div className="empty-state"><Bot size={28}/><strong>从一个本地项目开始</strong><span>选择项目后创建会话</span></div>}
         {session?.messages.map((message, index) => <article className={`message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "user" ? "You" : "MiniCode"}</span><p>{message.content}</p></article>)}
         {tools.map((tool, index) => <details className="tool" key={`${tool.tool_name}-${index}`}><summary><Wrench size={14}/><span>{tool.tool_name}</span><em>{tool.status}</em></summary><pre>{tool.result?.preview || tool.result?.summary || "Waiting for approval"}</pre></details>)}

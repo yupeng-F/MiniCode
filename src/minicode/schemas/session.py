@@ -34,6 +34,7 @@ class SessionState(ModelMixin):
     active_files: list[str] = field(default_factory=list)
     plan: list[str] = field(default_factory=list)
     memory_refs: list[str] = field(default_factory=list)
+    memory_retrieval: dict[str, object] = field(default_factory=dict)
     compact_summary: str = ""
     context_usage: dict[str, int] = field(default_factory=dict)
     context_dropped: list[str] = field(default_factory=list)

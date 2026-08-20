@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from minicode.memory import MemoryConflictError, MemoryService
 from minicode.observability import AuditStore, EvalCase, EvalRunner, TraceStore
+from minicode.schemas.session import SessionState
 
 
 def test_trace_store_is_append_only_filterable_and_tolerates_partial_tail(tmp_path):
@@ -88,3 +90,49 @@ def test_memory_promotion_requires_explicit_conflict_replacement(tmp_path):
 def test_memory_candidate_rejects_sensitive_content(tmp_path):
     memory = MemoryService(tmp_path / "memory")
     assert memory.propose_candidate("secret", "TOKEN=top-secret-value") is None
+
+
+def test_run_summary_is_idempotent_and_contains_only_bounded_conclusions(tmp_path):
+    memory = MemoryService(tmp_path / "memory")
+    session = SessionState(
+        run_id="run-summary",
+        task="修复 README 检索",
+        status="completed",
+        final_answer="已完成修复。" + "x" * 2_000,
+        active_files=["README.md"],
+    )
+
+    assert memory.store_run_summary(session)
+    assert memory.store_run_summary(session)
+
+    summaries = [item for item in memory.list_memories() if item.category == "summaries"]
+    assert len(summaries) == 1
+    assert summaries[0].metadata["tier"] == "medium"
+    assert "修复 README 检索" in summaries[0].content
+    assert "README.md" in summaries[0].content
+    assert len(summaries[0].content) < 1_500
+
+
+def test_medium_memory_retention_expires_old_items_caps_count_and_protects_pinned(tmp_path):
+    memory = MemoryService(tmp_path / "memory")
+    now = datetime(2026, 8, 20, tzinfo=UTC)
+    old = SessionState(run_id="old", task="过期任务", status="failed", final_answer="失败")
+    pinned = SessionState(run_id="pinned", task="固定任务", status="completed", final_answer="保留")
+    memory.store_run_summary(old, created_at=now - timedelta(days=31))
+    memory.store_run_summary(pinned, created_at=now - timedelta(days=90), pinned=True)
+    for index in range(202):
+        session = SessionState(
+            run_id=f"recent-{index}",
+            task=f"近期任务 {index}",
+            status="completed",
+            final_answer="完成",
+        )
+        memory.store_run_summary(session, created_at=now - timedelta(minutes=index))
+
+    removed = memory.enforce_retention(now=now, max_items=200, max_age_days=30)
+    summaries = [item for item in memory.list_memories() if item.category == "summaries"]
+
+    assert "old" in removed
+    assert "pinned" not in removed
+    assert memory.get_memory("pinned") is not None
+    assert len([item for item in summaries if item.metadata.get("pinned") != "true"]) == 200

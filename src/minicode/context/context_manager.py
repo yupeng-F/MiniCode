@@ -31,12 +31,12 @@ class ContextProjection:
     def render(self) -> str:
         sections = [
             self.system_and_tools,
-            f"## 当前任务\n{self.current_task}" if self.current_task else "",
             f"## 对话摘要\n{self.compact_summary}" if self.compact_summary else "",
             self.plan_files_meta,
             f"## 项目记忆\n{self.memory}" if self.memory else "",
             f"## 最近消息\n{self.recent_messages}" if self.recent_messages else "",
             f"## 最近工具结果\n{self.tool_history}" if self.tool_history else "",
+            f"## 当前任务（必须优先执行）\n{self.current_task}" if self.current_task else "",
         ]
         return "\n\n".join(section for section in sections if section)
 
@@ -95,9 +95,22 @@ class ContextManager:
             projection,
         )
         if self.memory_service:
-            memory = self.memory_service.retrieve(session.task, session.active_files)
-            if memory:
-                projection.memory = self._fit_section("memory", memory, projection)
+            memory_result = self.memory_service.retrieve_result(
+                session.task,
+                session.active_files,
+                mode=session.mode,
+                max_tokens=self.token_budget.partitions["memory"],
+            )
+            session.memory_refs = [item.memory_id for item in memory_result.items]
+            session.memory_retrieval = {
+                "provider": memory_result.provider,
+                "fallback_reason": memory_result.fallback_reason,
+                "external_transfer": memory_result.external_transfer,
+                "token_count": memory_result.token_count,
+                "item_count": len(memory_result.items),
+            }
+            if memory_result.rendered:
+                projection.memory = self._fit_section("memory", memory_result.rendered, projection)
         recent_messages = self._without_current_task(messages, session.task)
         if recent_messages:
             recent = "\n\n".join(

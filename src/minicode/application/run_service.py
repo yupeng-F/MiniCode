@@ -5,6 +5,7 @@ from minicode.context.context_manager import ContextManager
 from minicode.engine.model_client import JsonScriptModel, ModelClient
 from minicode.engine.query_loop import QueryLoop
 from minicode.memory.memory_service import MemoryService
+from minicode.memory.embedding import build_embedding_router
 from minicode.runtime.harness import HarnessRuntime
 from minicode.runtime.policy_engine import PolicyEngine
 from minicode.runtime.tool_executor import ToolExecutor
@@ -20,7 +21,10 @@ class RunService:
         self.store = SQLiteStore(self.workspace.root / ".minicode" / "state.db")
         registry = build_default_registry()
         artifacts = ArtifactStore(self.workspace.root / ".minicode")
-        memory = MemoryService(self.workspace.root / ".minicode" / "memory")
+        memory = MemoryService(
+            self.workspace.root / ".minicode" / "memory",
+            embedding_router=build_embedding_router(),
+        )
         selected_model = model or JsonScriptModel()
         executor = ToolExecutor(self.workspace, artifacts, task_agent_model=selected_model)
         runtime = HarnessRuntime(registry, PolicyEngine(), executor)

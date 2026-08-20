@@ -5,6 +5,7 @@ import pytest
 from minicode.context.context_manager import ContextManager
 from minicode.context.token_budget import UserMessageTooLarge
 from minicode.memory.memory_service import MemoryService
+from minicode.memory.hybrid_retriever import MemoryRetrievalResult
 from minicode.schemas.session import Message, SessionState
 from minicode.schemas.tool import ToolCall, ToolCallRecord, ToolResult
 
@@ -25,6 +26,42 @@ def test_context_projection_reports_partition_usage_without_repeating_current_ta
     assert projection.usage["system_and_tools"] > 0
     assert projection.total_tokens <= 48_000
     assert session.task in projection.render()
+
+
+def test_current_task_is_rendered_after_conversation_history():
+    session = SessionState(task="现在回答 README 的项目目标")
+    session.messages = [
+        Message(role="user", content="旧任务：继续修改 probe 文件"),
+        Message(role="assistant", content="旧任务已经完成"),
+        Message(role="user", content=session.task),
+    ]
+
+    rendered = ContextManager().build(session).render()
+
+    assert rendered.rfind(session.task) > rendered.rfind("旧任务已经完成")
+
+
+def test_context_passes_task_files_and_mode_and_records_retrieval_status(tmp_path):
+    memory = MemoryService(tmp_path / ".minicode" / "memory")
+    calls = []
+
+    def retrieve_result(task, active_files, mode="act", max_tokens=4_000):
+        calls.append((task, active_files, mode, max_tokens))
+        return MemoryRetrievalResult((), "local", "阿里云超时", False, 0)
+
+    memory.retrieve_result = retrieve_result  # type: ignore[method-assign]
+    session = SessionState(task="检查 README", mode="review", active_files=["README.md"])
+
+    ContextManager(memory_service=memory).build(session)
+
+    assert calls == [("检查 README", ["README.md"], "review", 4_000)]
+    assert session.memory_retrieval == {
+        "provider": "local",
+        "fallback_reason": "阿里云超时",
+        "external_transfer": False,
+        "token_count": 0,
+        "item_count": 0,
+    }
 
 
 def test_context_projection_rejects_oversized_current_task_before_model_call():

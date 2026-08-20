@@ -22,6 +22,11 @@ from minicode.engine.model_catalog import DEFAULT_MODEL_ID, MODEL_PROFILES
 from minicode.engine.model_factory import ModelFactory
 from minicode.engine.query_loop import QueryLoop
 from minicode.memory.memory_service import MemoryService
+from minicode.memory.embedding import (
+    EmbeddingConfig,
+    build_embedding_router,
+    local_embedding_marker,
+)
 from minicode.runtime.harness import HarnessRuntime
 from minicode.runtime.policy_engine import PolicyEngine
 from minicode.runtime.tool_executor import ToolExecutor
@@ -170,6 +175,7 @@ async def index() -> JSONResponse:
 @app.get("/api/capabilities")
 async def capabilities() -> JSONResponse:
     budget = TokenBudget()
+    embedding = EmbeddingConfig.from_environment()
     return JSONResponse({
         "default_model": DEFAULT_MODEL_ID,
         "models": [profile.model_dump() for profile in MODEL_PROFILES],
@@ -177,6 +183,16 @@ async def capabilities() -> JSONResponse:
             "input": budget.max_input_tokens,
             "output": budget.max_output_tokens,
             "user_message": budget.max_user_message_tokens,
+        },
+        "embedding": {
+            "remote_provider": "aliyun",
+            "remote_model": embedding.remote_model,
+            "remote_configured": bool(embedding.api_key),
+            "external_transfer": True,
+            "local_provider": "fastembed",
+            "local_model": embedding.local_model,
+            "local_installed": local_embedding_marker(embedding.local_cache_dir).is_file(),
+            "fallback": "fts5",
         },
     })
 
@@ -276,6 +292,14 @@ async def read_project_file(project_id: str, path: str, offset: int = 0, limit: 
 def _project_memory(project_id: str) -> MemoryService:
     workspace = _project_workspace(project_id)
     return MemoryService(workspace.root / ".minicode" / "memory")
+
+
+def _run_memory(workspace: WorkspaceManager) -> MemoryService:
+    factory = getattr(app.state, "embedding_router_factory", build_embedding_router)
+    return MemoryService(
+        workspace.root / ".minicode" / "memory",
+        embedding_router=factory(),
+    )
 
 
 @app.get("/api/projects/{project_id}/memories")
@@ -480,7 +504,7 @@ def _run_background(session: SessionState, workspace: WorkspaceManager, events: 
         _runs[session.run_id]["model"] = model
         registry = build_default_registry()
         artifacts = ArtifactStore(workspace.root / ".minicode")
-        memory = MemoryService(workspace.root / ".minicode" / "memory")
+        memory = _run_memory(workspace)
         runtime = HarnessRuntime(registry, PolicyEngine(), ToolExecutor(workspace, artifacts, task_agent_model=model))
         loop = QueryLoop(model, runtime, ContextManager(memory_service=memory), memory, sink)
         result = loop.run(session)
@@ -518,7 +542,7 @@ def _resolve_approval_background(run_id: str, approved: bool) -> None:
             model = _model_for_run(session.run_model_id or session.model_id)
         registry = build_default_registry()
         artifacts = ArtifactStore(workspace.root / ".minicode")
-        memory = MemoryService(workspace.root / ".minicode" / "memory")
+        memory = _run_memory(workspace)
         runtime = HarnessRuntime(registry, PolicyEngine(), ToolExecutor(workspace, artifacts, task_agent_model=model))
         loop = QueryLoop(model, runtime, ContextManager(memory_service=memory), memory, sink)
         result = loop.resume_approved(session) if approved else loop.reject_pending(session)

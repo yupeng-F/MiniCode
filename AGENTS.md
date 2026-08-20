@@ -28,7 +28,7 @@ Tool-Use Loop + Harness Runtime + Budgeted Context + Hybrid Tiered Memory
 
 旧 `multi_agents / LangGraph` 主线已经移除，当前可运行实现统一位于 `src/minicode/`。QueryLoop、Harness Runtime、DeepSeek 工具协议、工作区安全、审批、上下文分页与裁剪、项目级 Markdown Memory、SQLite 项目/会话索引和 React 三栏工作台已经形成可用基线。
 
-2026-08-20 已确认但尚未实现的下一阶段包括：长/中/短三级记忆、task 驱动的关键词与向量混合检索、TokenBudget 全链路硬上限、阿里云与本地 Embedding、Flash/Pro 模型切换、Enter 发送和对应的 Web 可观测性。这些是迁移后的产品化扩展，不影响“旧架构已完成迁移”的结论。
+2026-08-20 已落地 Memory/Context/Model 产品化主线：长/中/短三级记忆边界、task 驱动的 FTS5 + Chroma 混合检索、TokenBudget 全链路硬上限、阿里云与本地 Embedding Provider、Flash/Pro 模型切换、Enter 发送和 Web 检索状态提示。FastEmbed 本地模型仍坚持显式安装，不随普通 Run 自动下载。
 
 新的设计目标是把系统收敛为：
 
@@ -110,4 +110,4 @@ src/minicode/
 
 旧的 `multi_agents` LangGraph 原型及重复设计文档已删除。当前实现以 `src/minicode/` 为准，架构以 `docs/01_项目目标与架构设计.md` 为准，进度以 `docs/superpowers/plans/2026-07-15-minicode-productization.md` 顶部状态表为准。
 
-本轮 Memory/Context/Model 设计已经确认，但代码尚未实现。执行前必须先基于架构文档编写独立实施计划，按 TDD 分阶段落地，并避免把“设计目标”误报为“当前已实现”。
+本轮 Memory/Context/Model 主线已按中文实施计划完成编码和自动化测试。当前仍需区分“已实现能力”与后续增强：后台向量索引任务队列、全局用户偏好白名单、完整记忆得分详情界面和三条 Embedding 路径的发布级 Chrome 回归仍属于后续工作。

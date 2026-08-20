@@ -34,6 +34,9 @@ def test_web_capabilities_lists_selectable_models_and_token_limits():
         "deepseek-v4-pro",
     ]
     assert response.json()["token_limits"] == {"input": 48_000, "output": 8_000, "user_message": 12_000}
+    assert response.json()["embedding"]["remote_model"] == "qwen3.7-text-embedding"
+    assert response.json()["embedding"]["local_model"] == "BAAI/bge-small-zh-v1.5"
+    assert "api_key" not in str(response.json()["embedding"]).lower()
 
 
 def test_web_session_accepts_selected_model_and_rejects_unknown_model(tmp_path: Path):

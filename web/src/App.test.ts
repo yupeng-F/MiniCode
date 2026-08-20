@@ -4,6 +4,24 @@ import * as AppModule from "./App";
 
 const { isActiveRunStatus, shouldRenderFinalAnswer } = AppModule;
 
+describe("Embedding 检索状态", () => {
+  const embeddingStatusLabel = (AppModule as unknown as {
+    embeddingStatusLabel?: (status?: { provider: string; external_transfer: boolean; fallback_reason: string }) => string;
+  }).embeddingStatusLabel;
+
+  it("提示阿里云外部传输", () => {
+    expect(embeddingStatusLabel?.({ provider: "aliyun", external_transfer: true, fallback_reason: "" }))
+      .toContain("内容已发送到阿里云");
+  });
+
+  it("显示本地模型和关键词降级原因", () => {
+    expect(embeddingStatusLabel?.({ provider: "local", external_transfer: false, fallback_reason: "阿里云超时" }))
+      .toBe("本地 embedding（阿里云超时）");
+    expect(embeddingStatusLabel?.({ provider: "fts5", external_transfer: false, fallback_reason: "未安装本地模型" }))
+      .toBe("关键词检索（未安装本地模型）");
+  });
+});
+
 describe("final answer presentation", () => {
   it("does not render a final answer twice when it is already the last assistant message", () => {
     expect(shouldRenderFinalAnswer([
