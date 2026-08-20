@@ -27,3 +27,4 @@ class SessionSummary(ModelMixin):
     title: str
     status: str
     updated_at: str
+    model_id: str = "deepseek-v4-flash"

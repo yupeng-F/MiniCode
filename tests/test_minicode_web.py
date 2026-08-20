@@ -24,6 +24,87 @@ def test_web_index_reports_architecture():
     assert response.json()["name"] == "MiniCode"
 
 
+def test_web_capabilities_lists_selectable_models_and_token_limits():
+    response = TestClient(app).get("/api/capabilities")
+
+    assert response.status_code == 200
+    assert response.json()["default_model"] == "deepseek-v4-flash"
+    assert [item["id"] for item in response.json()["models"]] == [
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+    ]
+    assert response.json()["token_limits"] == {"input": 48_000, "output": 8_000, "user_message": 12_000}
+
+
+def test_web_session_accepts_selected_model_and_rejects_unknown_model(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+
+    selected = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "检查项目", "mode": "ask", "model_id": "deepseek-v4-pro"},
+    )
+    rejected = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "检查项目", "mode": "ask", "model_id": "unknown-model"},
+    )
+
+    assert selected.status_code == 200
+    assert selected.json()["model_id"] == "deepseek-v4-pro"
+    assert rejected.status_code == 422
+
+
+def test_web_run_uses_pinned_model_and_blocks_switch_while_active(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    selected_models: list[str] = []
+
+    def model_factory(model_id: str):
+        selected_models.append(model_id)
+        return JsonScriptModel([{
+            "type": "tool_use",
+            "tool_call": {"tool_name": "bash", "arguments": {"command": "pwd"}},
+        }])
+
+    app.state.model_factory = model_factory
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    session = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "检查项目", "mode": "act", "model_id": "deepseek-v4-pro"},
+    ).json()
+
+    created = client.post(
+        "/api/runs",
+        json={"session_id": session["session_id"], "input": "执行检查"},
+    ).json()
+
+    import time
+
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        state = client.get(f"/api/runs/{created['run_id']}").json()
+        if state["status"] == "waiting_approval":
+            break
+        time.sleep(0.02)
+    else:
+        raise AssertionError("Run 未进入等待审批状态")
+
+    blocked = client.patch(
+        f"/api/sessions/{session['session_id']}/model",
+        json={"model_id": "deepseek-v4-flash"},
+    )
+    run_state = client.get(f"/api/runs/{created['run_id']}").json()
+
+    assert selected_models == ["deepseek-v4-pro"]
+    assert run_state["run_model_id"] == "deepseek-v4-pro"
+    assert blocked.status_code == 409
+
+
 def test_web_creates_project_and_persistent_session(tmp_path: Path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()

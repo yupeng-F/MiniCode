@@ -281,3 +281,15 @@ def test_model_factory_builds_deepseek_client_from_environment(monkeypatch):
     assert isinstance(model, DeepSeekModelClient)
     assert model.model == "deepseek-v4-flash"
     assert model.base_url == "https://api.deepseek.com"
+
+
+def test_model_factory_accepts_pro_and_rejects_unknown_model(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setenv("MINICODE_MODEL_PROVIDER", "deepseek")
+
+    pro = ModelFactory.from_environment(model="deepseek-v4-pro", load_dotenv_file=False)
+
+    assert isinstance(pro, DeepSeekModelClient)
+    assert pro.model == "deepseek-v4-pro"
+    with pytest.raises(ModelConfigurationError, match="不支持的模型"):
+        ModelFactory.from_environment(model="unknown-model", load_dotenv_file=False)

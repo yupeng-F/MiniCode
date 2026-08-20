@@ -9,6 +9,9 @@ from minicode.schemas.base import ModelMixin
 from minicode.schemas.tool import ToolCall, ToolCallRecord
 
 
+DEFAULT_MODEL_ID = "deepseek-v4-flash"
+
+
 @dataclass(slots=True)
 class Message(ModelMixin):
     role: str
@@ -22,6 +25,8 @@ class SessionState(ModelMixin):
     run_id: str = field(default_factory=lambda: str(uuid4()))
     workspace: str = "."
     mode: Literal["ask", "plan", "act", "review"] = "act"
+    model_id: str = DEFAULT_MODEL_ID
+    run_model_id: str = ""
     status: Literal["pending", "running", "waiting_approval", "completed", "failed", "cancelled"] = "pending"
     task: str = ""
     messages: list[Message] = field(default_factory=list)

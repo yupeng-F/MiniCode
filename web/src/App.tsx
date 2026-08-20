@@ -1,11 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronRight, CirclePlus, FileCode2, Folder, FolderOpen, PanelRight, RefreshCw, Send, ShieldCheck, Terminal, Trash2, Wrench, X } from "lucide-react";
-import { api, type DirectoryEntry, type DirectoryListing, type FilePage, type MemoryRecord, type Project, type Session, type SessionSummary } from "./api";
+import { api, type Capabilities, type DirectoryEntry, type DirectoryListing, type FilePage, type MemoryRecord, type Message, type Project, type Session, type SessionSummary } from "./api";
 
 const modes = ["ask", "plan", "act", "review"];
 type ActiveRun = { runId: string; sessionId: string; projectId: string };
 const lastProjectKey = "minicode.lastProject";
 const lastSessionKey = "minicode.lastSession";
+
+export function shouldRenderFinalAnswer(messages: Message[] | undefined, finalAnswer: string): boolean {
+  if (!finalAnswer) return false;
+  const lastMessage = messages?.[messages.length - 1];
+  return lastMessage?.role !== "assistant" || lastMessage.content !== finalAnswer;
+}
+
+export function isActiveRunStatus(status: string): boolean {
+  return ["pending", "running", "waiting_approval"].includes(status);
+}
+
+export function shouldSubmitComposer(event: { key: string; shiftKey: boolean; isComposing: boolean }): boolean {
+  return event.key === "Enter" && !event.shiftKey && !event.isComposing;
+}
+
+export function estimateComposerTokens(content: string): number {
+  if (!content) return 0;
+  const cjkCount = (content.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) ?? []).length;
+  const nonCjkCount = content.length - cjkCount;
+  return Math.ceil((cjkCount + Math.ceil(nonCjkCount / 4)) * 1.1);
+}
 
 export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -14,6 +35,8 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState("act");
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
+  const [modelId, setModelId] = useState("deepseek-v4-flash");
   const [activeRun, setActiveRun] = useState<ActiveRun | null>(null);
   const [error, setError] = useState("");
   const [contextTab, setContextTab] = useState("files");
@@ -26,6 +49,9 @@ export function App() {
   const [filePage, setFilePage] = useState<FilePage | null>(null);
   const [memories, setMemories] = useState<MemoryRecord[]>([]);
   const sessionRequest = useRef(0);
+  const inputTokens = useMemo(() => estimateComposerTokens(input), [input]);
+  const userMessageLimit = capabilities?.token_limits.user_message ?? 12_000;
+  const inputOverLimit = inputTokens > userMessageLimit;
 
   const report = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
   const refreshProjects = async () => { try {
@@ -38,7 +64,13 @@ export function App() {
     try { setFileTree({ ".": (await api.listFiles(item.project_id)).entries }); setExpandedDirs(new Set(["."])); setSelectedFile(""); setFilePage(null); } catch (err) { report(err); }
   };
 
-  useEffect(() => { void refreshProjects(); }, []);
+  useEffect(() => {
+    void refreshProjects();
+    void api.capabilities().then(result => {
+      setCapabilities(result);
+      setModelId(current => current || result.default_model);
+    }).catch(report);
+  }, []);
   useEffect(() => { if (project) { void api.listSessions(project.project_id).then(setSessions).catch(report); void loadRoot(project); } }, [project]);
   useEffect(() => { if (project && selectedFile) void api.readFile(project.project_id, selectedFile).then(setFilePage).catch(report); }, [project, selectedFile]);
   useEffect(() => { if (project && contextTab === "memory") void api.listMemories(project.project_id).then(setMemories).catch(report); }, [project, contextTab]);
@@ -48,7 +80,7 @@ export function App() {
       try {
         const latest = await api.getRun(activeRun.runId);
         setSession(current => current?.session_id === activeRun.sessionId ? latest : current);
-        if (!["running", "waiting_approval"].includes(latest.status)) {
+        if (!isActiveRunStatus(latest.status)) {
           setActiveRun(current => current?.runId === activeRun.runId ? null : current);
           void api.listSessions(activeRun.projectId).then(items => {
             setSessions(current => project?.project_id === activeRun.projectId ? items : current);
@@ -91,16 +123,26 @@ export function App() {
       setSession(next);
       window.localStorage.setItem(lastSessionKey, next.session_id);
       setMode(next.mode);
-      if (["running", "waiting_approval"].includes(next.status) && project) {
+      setModelId(next.model_id);
+      if (isActiveRunStatus(next.status) && project) {
         setActiveRun({ runId: next.run_id, sessionId: next.session_id, projectId: project.project_id });
       }
     } catch (err) { report(err); }
   };
   const newSession = async () => {
     if (!project || !dialogValue.trim()) return;
-    try { const next = await api.createSession(project.project_id, dialogValue.trim(), mode); sessionRequest.current += 1; setActiveRun(null); setSession(next); setDialog(null); setDialogValue(""); setSessions(await api.listSessions(project.project_id)); } catch (err) { report(err); }
+    try { const next = await api.createSession(project.project_id, dialogValue.trim(), mode, modelId); sessionRequest.current += 1; setActiveRun(null); setSession(next); setModelId(next.model_id); setDialog(null); setDialogValue(""); setSessions(await api.listSessions(project.project_id)); } catch (err) { report(err); }
   };
-  const run = async () => { if (!project || !session || !input.trim()) return; try { const result = await api.run(session.session_id, input.trim(), mode); setInput(""); setActiveRun({ runId: result.run_id, sessionId: session.session_id, projectId: project.project_id }); } catch (err) { report(err); } };
+  const run = async () => { if (!project || !session || !input.trim() || inputOverLimit) return; try { const result = await api.run(session.session_id, input.trim(), mode); setInput(""); setActiveRun({ runId: result.run_id, sessionId: session.session_id, projectId: project.project_id }); } catch (err) { report(err); } };
+  const selectModel = async (nextModelId: string) => {
+    if (activeRun) return;
+    if (!session) { setModelId(nextModelId); return; }
+    try {
+      const next = await api.selectModel(session.session_id, nextModelId);
+      setSession(next);
+      setModelId(next.model_id);
+    } catch (err) { report(err); }
+  };
   const decide = async (decision: "approve" | "reject") => { if (activeRun) try { await api.decide(activeRun.runId, decision); setActiveRun(current => current ? { ...current } : current); } catch (err) { report(err); } };
   const deleteSession = async (item: SessionSummary) => {
     if (!window.confirm(`删除会话“${item.title}”？`)) return;
@@ -145,16 +187,16 @@ export function App() {
       <nav>{sessions.map(item => <div className="nav-row" key={item.session_id}><button className={session?.session_id === item.session_id ? "nav-item selected" : "nav-item"} onClick={() => void openSession(item)}><span className="session-dot"/><span>{item.title}</span></button><button className="delete-action" title="删除会话" onClick={() => void deleteSession(item)}><Trash2 size={13}/></button></div>)}</nav>
     </aside>
     <section className="conversation">
-      <header className="toolbar"><div><span className="status-light" data-running={Boolean(activeRun)}/>{session ? session.task : "选择项目并创建会话"}</div><select value={mode} onChange={event => setMode(event.target.value)}>{modes.map(item => <option key={item}>{item}</option>)}</select></header>
+      <header className="toolbar"><div><span className="status-light" data-running={Boolean(activeRun)}/>{session ? session.task : "选择项目并创建会话"}</div><select aria-label="选择模型" value={modelId} disabled={Boolean(activeRun)} onChange={event => void selectModel(event.target.value)}>{(capabilities?.models ?? [{ id: "deepseek-v4-flash", label: "DeepSeek V4 Flash（快速）" }]).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><select aria-label="选择模式" value={mode} onChange={event => setMode(event.target.value)}>{modes.map(item => <option key={item}>{item}</option>)}</select></header>
       <div className="timeline">
         {error && <div className="error"><X size={15}/><span>{error}</span><button title="关闭错误" onClick={() => setError("")}><X size={14}/></button></div>}
         {!session && <div className="empty-state"><Bot size={28}/><strong>从一个本地项目开始</strong><span>选择项目后创建会话</span></div>}
         {session?.messages.map((message, index) => <article className={`message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "user" ? "You" : "MiniCode"}</span><p>{message.content}</p></article>)}
         {tools.map((tool, index) => <details className="tool" key={`${tool.tool_name}-${index}`}><summary><Wrench size={14}/><span>{tool.tool_name}</span><em>{tool.status}</em></summary><pre>{tool.result?.preview || tool.result?.summary || "Waiting for approval"}</pre></details>)}
         {session?.status === "waiting_approval" && <div className="approval"><ShieldCheck size={18}/><span>该操作需要确认</span><button onClick={() => void decide("reject")}>拒绝</button><button className="primary" onClick={() => void decide("approve")}>批准</button></div>}
-        {session?.final_answer && <article className="message assistant"><span>MiniCode</span><p>{session.final_answer}</p></article>}
+        {session && shouldRenderFinalAnswer(session.messages, session.final_answer) && <article className="message assistant"><span>MiniCode</span><p>{session.final_answer}</p></article>}
       </div>
-      <footer className="composer"><textarea value={input} onChange={event => setInput(event.target.value)} disabled={!session || Boolean(activeRun)} placeholder={session ? "描述下一步任务" : "先创建会话"}/><button className="primary" title="运行任务" onClick={() => void run()} disabled={!session || !input.trim() || Boolean(activeRun)}><Send size={17}/></button></footer>
+      <footer className="composer"><div className="composer-input"><textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (shouldSubmitComposer({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); void run(); } }} disabled={!session || Boolean(activeRun)} placeholder={session ? "描述下一步任务（Enter 发送，Shift+Enter 换行）" : "先创建会话"}/><small className={inputOverLimit ? "token-count over-limit" : "token-count"}>约 {inputTokens.toLocaleString()} / {userMessageLimit.toLocaleString()} tokens</small></div><button className="primary" title={inputOverLimit ? "输入超过 Token 上限" : "运行任务"} onClick={() => void run()} disabled={!session || !input.trim() || inputOverLimit || Boolean(activeRun)}><Send size={17}/></button></footer>
     </section>
     <aside className="context-panel">
       <header><PanelRight size={17}/><span>上下文</span></header>

@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from minicode.schemas.event import Event
+from minicode.engine.model_catalog import DEFAULT_MODEL_ID
 from minicode.schemas.project import Project, SessionSummary
 from minicode.schemas.session import SessionState
 from minicode.storage.sqlite_store import _session_from_dict
@@ -44,6 +45,7 @@ class GlobalStore:
                     run_id TEXT NOT NULL,
                     title TEXT NOT NULL,
                     status TEXT NOT NULL,
+                    model_id TEXT NOT NULL DEFAULT 'deepseek-v4-flash',
                     updated_at TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     FOREIGN KEY(project_id) REFERENCES projects(project_id)
@@ -59,6 +61,7 @@ class GlobalStore:
                     project_id TEXT NOT NULL,
                     workspace TEXT NOT NULL,
                     status TEXT NOT NULL,
+                    model_id TEXT NOT NULL DEFAULT 'deepseek-v4-flash',
                     payload TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -66,6 +69,18 @@ class GlobalStore:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id, updated_at DESC)")
+            self._ensure_column(
+                conn,
+                "sessions",
+                "model_id",
+                f"TEXT NOT NULL DEFAULT '{DEFAULT_MODEL_ID}'",
+            )
+            self._ensure_column(
+                conn,
+                "runs",
+                "model_id",
+                f"TEXT NOT NULL DEFAULT '{DEFAULT_MODEL_ID}'",
+            )
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -78,6 +93,12 @@ class GlobalStore:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_run ON events(run_id, event_id)")
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
 
     def upsert_project(self, project: Project) -> Project:
         existing = self.get_project_by_workspace(project.workspace)
@@ -111,16 +132,26 @@ class GlobalStore:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO sessions(session_id, project_id, run_id, title, status, updated_at, payload)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sessions(session_id, project_id, run_id, title, status, model_id, updated_at, payload)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
                     run_id=excluded.run_id,
                     title=sessions.title,
                     status=excluded.status,
+                    model_id=excluded.model_id,
                     updated_at=excluded.updated_at,
                     payload=excluded.payload
                 """,
-                (session.session_id, project_id, session.run_id, session_title, session.status, _now(), payload),
+                (
+                    session.session_id,
+                    project_id,
+                    session.run_id,
+                    session_title,
+                    session.status,
+                    session.model_id,
+                    _now(),
+                    payload,
+                ),
             )
             conn.execute("UPDATE projects SET updated_at = ? WHERE project_id = ?", (_now(), project_id))
 
@@ -132,7 +163,8 @@ class GlobalStore:
     def list_sessions(self, project_id: str) -> list[SessionSummary]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT session_id, project_id, title, status, updated_at FROM sessions WHERE project_id = ? ORDER BY updated_at DESC",
+                "SELECT session_id, project_id, title, status, model_id, updated_at "
+                "FROM sessions WHERE project_id = ? ORDER BY updated_at DESC",
                 (project_id,),
             ).fetchall()
         return [SessionSummary(**dict(row)) for row in rows]
@@ -161,8 +193,8 @@ class GlobalStore:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO runs(run_id, session_id, project_id, workspace, status, payload, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO runs(run_id, session_id, project_id, workspace, status, model_id, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
                     status=CASE
                         WHEN runs.status = 'approval_executing'
@@ -170,12 +202,13 @@ class GlobalStore:
                         THEN runs.status
                         ELSE excluded.status
                     END,
+                    model_id=runs.model_id,
                     payload=excluded.payload,
                     updated_at=excluded.updated_at
                 """,
                 (
                     session.run_id, session.session_id, project_id, session.workspace,
-                    run_status, session.model_dump_json(), now, now,
+                    run_status, session.run_model_id or session.model_id, session.model_dump_json(), now, now,
                 ),
             )
 
