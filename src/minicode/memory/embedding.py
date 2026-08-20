@@ -41,6 +41,11 @@ class EmbeddingQueryResult:
     vector: list[float]
     identity: EmbeddingIdentity
     fallback_reason: str = ""
+    external_transfer: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.external_transfer is None:
+            object.__setattr__(self, "external_transfer", self.identity.external_transfer)
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,7 +255,9 @@ class EmbeddingRouter:
     def embed_query(self, text: str) -> EmbeddingQueryResult:
         fallback_reason = "" if self.remote is not None else self.initialization_fallback_reason
         is_sensitive = self.sensitive_filter.contains_sensitive(text)
+        remote_attempted = False
         if self.remote is not None and not is_sensitive:
+            remote_attempted = True
             try:
                 return EmbeddingQueryResult(self.remote.embed_query(text), self.remote.identity)
             except Exception as exc:
@@ -265,6 +272,7 @@ class EmbeddingRouter:
                     self.local.embed_query(text),
                     self.local.identity,
                     fallback_reason=fallback_reason,
+                    external_transfer=remote_attempted,
                 )
             except Exception as exc:
                 local_error = self.sensitive_filter.sanitize(str(exc))

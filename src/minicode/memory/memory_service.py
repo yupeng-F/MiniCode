@@ -16,6 +16,13 @@ from minicode.memory.sensitive_data_filter import SensitiveDataFilter
 from minicode.memory.vector_store import VectorMemory, VectorStore
 
 
+@dataclass(frozen=True, slots=True)
+class VectorRetrievalResult:
+    vector_ids: list[str]
+    pending_count: int
+    error: Exception | None = None
+
+
 class MemoryService:
     """项目本地 Markdown 记忆，以及有界、路径感知的检索。"""
 
@@ -338,28 +345,31 @@ class MemoryService:
             try:
                 embedding = self.embedding_router.embed_query(query)
                 provider = embedding.identity.provider
-                external_transfer = embedding.identity.external_transfer
+                external_transfer = embedding.external_transfer
                 fallback_reason = self._append_fallback_reason(
                     fallback_reason,
-                    "embedding",
+                    "",
                     embedding.fallback_reason,
                 )
             except Exception as exc:
                 fallback_reason = self._append_fallback_reason(fallback_reason, "embedding", exc)
                 provider = "fts5"
             else:
-                try:
-                    vector_ids, pending_count = self._retrieve_vector_ids(embedding, records)
-                    if pending_count:
-                        fallback_reason = self._append_fallback_reason(
-                            fallback_reason,
-                            f"剩余 {pending_count} 条待处理文档",
-                            "",
-                        )
-                except Exception as exc:
-                    fallback_reason = self._append_fallback_reason(fallback_reason, "vector", exc)
+                vector_result = self._retrieve_vector_ids(embedding, records)
+                vector_ids = vector_result.vector_ids
+                if vector_result.pending_count:
+                    fallback_reason = self._append_fallback_reason(
+                        fallback_reason,
+                        "",
+                        f"剩余 {vector_result.pending_count} 条待处理文档",
+                    )
+                if vector_result.error is not None:
+                    fallback_reason = self._append_fallback_reason(
+                        fallback_reason,
+                        "vector",
+                        vector_result.error,
+                    )
                     provider = "fts5"
-                    external_transfer = False
 
         try:
             ranked_records = [self._as_ranked_memory(record) for record in records.values()]
@@ -388,35 +398,47 @@ class MemoryService:
         self,
         embedding: Any,
         records: dict[str, "MemoryRecord"],
-    ) -> tuple[list[str], int]:
-        if self.vector_store is None:
-            self.vector_store = VectorStore(self.store.root / "chroma")
-        hashes = self.vector_store.content_hashes(embedding.identity, self.project_id)
-        pending: list[tuple[MemoryRecord, str]] = []
+    ) -> "VectorRetrievalResult":
+        candidates: list[tuple[MemoryRecord, str]] = []
         for record in records.values():
             content_hash = hashlib.sha256(record.content.encode("utf-8")).hexdigest()
-            if hashes.get(record.id) != content_hash:
-                pending.append((record, content_hash))
+            candidates.append((record, content_hash))
+        candidates = [
+            (record, content_hash)
+            for record, content_hash in candidates
+            if not self.filter.contains_sensitive(record.content)
+        ]
+        try:
+            if self.vector_store is None:
+                self.vector_store = VectorStore(self.store.root / "chroma")
+            hashes = self.vector_store.content_hashes(embedding.identity, self.project_id)
+        except Exception as exc:
+            return VectorRetrievalResult([], len(candidates), exc)
         pending = [
             (record, content_hash)
-            for record, content_hash in pending
-            if not self.filter.contains_sensitive(record.content)
+            for record, content_hash in candidates
+            if hashes.get(record.id) != content_hash
         ]
         batch = pending[:32]
         if batch:
-            vectors = self.embedding_router.embed_documents(
-                embedding.identity,
-                [record.content for record, _ in batch],
-            )
-            self.vector_store.upsert(
-                embedding.identity,
-                [
-                    VectorMemory(record.id, self.project_id, content_hash, vector)
-                    for (record, content_hash), vector in zip(batch, vectors)
-                ],
-            )
-        return (
-            [
+            try:
+                vectors = self.embedding_router.embed_documents(
+                    embedding.identity,
+                    [record.content for record, _ in batch],
+                )
+                if len(vectors) != len(batch):
+                    raise ValueError("文档 embedding 响应条数与请求不一致")
+                self.vector_store.upsert(
+                    embedding.identity,
+                    [
+                        VectorMemory(record.id, self.project_id, content_hash, vector)
+                        for (record, content_hash), vector in zip(batch, vectors)
+                    ],
+                )
+            except Exception as exc:
+                return VectorRetrievalResult([], len(pending), exc)
+        try:
+            vector_ids = [
                 hit.memory_id
                 for hit in self.vector_store.query(
                     embedding.identity,
@@ -425,12 +447,15 @@ class MemoryService:
                     limit=30,
                 )
                 if hit.memory_id in records
-            ],
-            len(pending) - len(batch),
-        )
+            ]
+        except Exception as exc:
+            return VectorRetrievalResult([], len(pending) - len(batch), exc)
+        return VectorRetrievalResult(vector_ids, len(pending) - len(batch))
 
     def _append_fallback_reason(self, existing: str, stage: str, error: Exception | str) -> str:
         detail = self.filter.sanitize(str(error)).strip()
+        if not detail:
+            return existing
         value = ": ".join(part for part in (stage, detail) if part)
         return "; ".join(part for part in (existing, value) if part)
 

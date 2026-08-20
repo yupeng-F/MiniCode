@@ -183,6 +183,7 @@ def test_memory_service_returns_observable_hybrid_result(tmp_path):
 
     assert result.provider == "aliyun"
     assert result.external_transfer is True
+    assert result.fallback_reason == ""
     assert result.items[0].memory_id in {"keyword", "semantic"}
     assert {record.memory_id for record in vectors.upserts} == {"keyword", "semantic"}
     assert vectors.query_calls[0][3] == 30
@@ -318,3 +319,49 @@ def test_frontend_embedding_indexes_at_most_thirty_two_pending_records(tmp_path)
     assert len(router.document_calls) == 1
     assert len(router.document_calls[0]) == 32
     assert "1 条待处理" in result.fallback_reason
+
+
+def test_vector_failure_keeps_remote_external_transfer_visible(tmp_path):
+    router = FakeEmbeddingRouter()
+    router.embed_documents = lambda *args: (_ for _ in ()).throw(RuntimeError("upsert input failed"))
+    memory = MemoryService(
+        tmp_path / ".minicode" / "memory",
+        embedding_router=router,
+        vector_store=FakeVectorStore(),
+    )
+    memory.store_rule("semantic", "发布前必须执行质量门禁。")
+
+    result = memory.retrieve_result("查询", [])
+
+    assert result.provider == "fts5"
+    assert result.external_transfer is True
+    assert "vector" in result.fallback_reason
+
+
+def test_vector_query_failure_reports_pending_records_after_frontend_batch(tmp_path):
+    router = FakeEmbeddingRouter()
+    vectors = FakeVectorStore(hits=[])
+    vectors.query = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("query failed"))
+    memory = MemoryService(tmp_path / ".minicode" / "memory", embedding_router=router, vector_store=vectors)
+    for index in range(33):
+        memory.store_rule(f"rule-{index}", f"第 {index} 条普通规则")
+
+    result = memory.retrieve_result("普通查询", [])
+
+    assert "1 条待处理" in result.fallback_reason
+    assert result.external_transfer is True
+
+
+def test_short_document_embedding_response_is_not_partially_upserted(tmp_path):
+    router = FakeEmbeddingRouter()
+    router.embed_documents = lambda identity, texts: [[0.2] * 4]
+    vectors = FakeVectorStore(hits=[])
+    memory = MemoryService(tmp_path / ".minicode" / "memory", embedding_router=router, vector_store=vectors)
+    memory.store_rule("one", "第一条普通规则")
+    memory.store_rule("two", "第二条普通规则")
+
+    result = memory.retrieve_result("普通查询", [])
+
+    assert vectors.upserts == []
+    assert "vector" in result.fallback_reason
+    assert "2 条待处理" in result.fallback_reason

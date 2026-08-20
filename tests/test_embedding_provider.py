@@ -112,6 +112,7 @@ def test_embedding_router_falls_back_to_local_after_remote_failure():
 
     assert result.identity.provider == "local"
     assert result.fallback_reason == "aliyun: timeout"
+    assert result.external_transfer is True
     assert len(result.vector) == 512
 
 
