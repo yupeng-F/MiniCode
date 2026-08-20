@@ -182,6 +182,20 @@ class MemoryService:
         self._write(record.category, record.id, metadata, record.content)
         return True
 
+    def enable_memory(self, memory_id: str) -> bool:
+        record = self.get_memory(memory_id)
+        if record is None:
+            return False
+        if record.category == "summaries":
+            enabled = self.keyword_index.update_medium(record.id, enabled=True)
+            if enabled:
+                self._rebuild_keyword_index()
+            return enabled
+        metadata = dict(record.metadata)
+        metadata["status"] = "enabled"
+        self._write(record.category, record.id, metadata, record.content)
+        return True
+
     def delete_memory(self, memory_id: str) -> bool:
         record = self.get_memory(memory_id)
         if record is None:

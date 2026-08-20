@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from minicode.engine.model_client import JsonScriptModel
 from minicode.interfaces.web.server import app
 from minicode.memory.memory_service import MemoryService
+from minicode.schemas.session import SessionState
 
 
 class FixedTokenCounter:
@@ -273,3 +274,34 @@ def test_web_manages_project_memory(tmp_path: Path):
     assert listed.json()[0]["content"] == "Always run pytest."
     assert disabled.json()["status"] == "disabled"
     assert deleted.status_code == 204
+
+
+def test_web_reenables_summary_memory_and_persists_it(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    memory = MemoryService(workspace / ".minicode" / "memory")
+    session = SessionState(
+        run_id="web-summary",
+        task="恢复检索",
+        status="completed",
+        final_answer="恢复后的摘要",
+    )
+    assert memory.store_run_summary(session)
+    assert client.patch(
+        f"/api/projects/{project['project_id']}/memories/{session.run_id}",
+        json={"enabled": False},
+    ).json()["status"] == "disabled"
+
+    enabled = client.patch(
+        f"/api/projects/{project['project_id']}/memories/{session.run_id}",
+        json={"enabled": True},
+    )
+
+    assert enabled.status_code == 200
+    assert enabled.json()["status"] == "enabled"
+    reloaded = MemoryService(workspace / ".minicode" / "memory")
+    assert reloaded.get_memory(session.run_id).status == "enabled"
+    assert "恢复后的摘要" in reloaded.retrieve("恢复后的摘要", [])

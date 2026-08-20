@@ -72,6 +72,24 @@ def test_memory_candidate_dedup_promotion_and_crud(tmp_path):
     assert memory.get_memory(rule_id) is None
 
 
+def test_enable_memory_reenables_markdown_rule_and_candidate(tmp_path):
+    root = tmp_path / "memory"
+    memory = MemoryService(root)
+    assert memory.store_rule("format", "Use ruff.")
+    candidate_id = memory.propose_candidate("docs", "Document API changes.")
+
+    assert candidate_id is not None
+    assert memory.disable_memory("format")
+    assert memory.disable_memory(candidate_id)
+    assert memory.enable_memory("format")
+    assert memory.enable_memory(candidate_id)
+
+    reloaded = MemoryService(root)
+    assert reloaded.get_memory("format").status == "enabled"
+    assert reloaded.get_memory(candidate_id).status == "enabled"
+    assert "Use ruff." in reloaded.retrieve("ruff", [])
+
+
 def test_memory_promotion_requires_explicit_conflict_replacement(tmp_path):
     memory = MemoryService(tmp_path / "memory")
     assert memory.store_rule("formatting", "Use black.")
@@ -133,6 +151,24 @@ def test_medium_memory_update_and_disable_survive_reload(tmp_path):
     assert record.content == "新摘要"
     assert record.status == "disabled"
     assert reloaded.retrieve("新摘要", []) == ""
+
+
+def test_disabled_summary_stays_disabled_when_stored_again(tmp_path):
+    root = tmp_path / "memory"
+    memory = MemoryService(root)
+    session = SessionState(
+        run_id="run-summary-duplicate",
+        task="归档任务",
+        status="completed",
+        final_answer="归档结论",
+    )
+    assert memory.store_run_summary(session)
+    assert memory.disable_memory(session.run_id)
+    assert memory.store_run_summary(session)
+
+    reloaded = MemoryService(root)
+    assert reloaded.get_memory(session.run_id).status == "disabled"
+    assert reloaded.retrieve("归档结论", []) == ""
 
 
 def test_medium_memory_retention_expires_old_items_caps_count_and_protects_pinned(tmp_path):

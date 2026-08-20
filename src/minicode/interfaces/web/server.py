@@ -318,6 +318,8 @@ async def update_project_memory(project_id: str, memory_id: str, req: MemoryUpda
     memory = _project_memory(project_id)
     if req.enabled is False:
         changed = memory.disable_memory(memory_id)
+    elif req.enabled is True:
+        changed = memory.enable_memory(memory_id)
     else:
         changed = memory.update_memory(memory_id, content=req.content, name=req.name, paths=req.paths)
     if not changed:

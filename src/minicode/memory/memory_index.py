@@ -93,7 +93,7 @@ class MemoryIndex:
                 "ON CONFLICT(memory_id, project_id) DO UPDATE SET "
                 "task=excluded.task, status=excluded.status, content=excluded.content, "
                 "active_files=excluded.active_files, last_used_at=excluded.last_used_at, "
-                "use_count=excluded.use_count, pinned=excluded.pinned, enabled=excluded.enabled",
+                "use_count=excluded.use_count, pinned=excluded.pinned",
                 (
                     record.memory_id,
                     self.project_id,
