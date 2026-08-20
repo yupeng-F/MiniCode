@@ -88,6 +88,8 @@ def test_enable_memory_reenables_markdown_rule_and_candidate(tmp_path):
     assert reloaded.get_memory("format").status == "enabled"
     assert reloaded.get_memory(candidate_id).status == "enabled"
     assert "Use ruff." in reloaded.retrieve("ruff", [])
+    assert "Document API changes." not in reloaded.retrieve("Document API changes", [])
+    assert candidate_id not in reloaded.keyword_index.search("Document API changes")
 
 
 def test_memory_promotion_requires_explicit_conflict_replacement(tmp_path):
