@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -85,6 +86,21 @@ def test_aliyun_provider_calls_expected_model_and_validates_dimension():
     )
     with pytest.raises(module.EmbeddingDimensionError):
         wrong.embed_query("维度错误")
+
+
+def test_aliyun_client_disables_sdk_retries(monkeypatch):
+    created_kwargs = {}
+
+    def create_client(**kwargs):
+        created_kwargs.update(kwargs)
+        return FakeClient(FakeEmbeddings())
+
+    monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=create_client))
+
+    module.AliyunEmbeddingProvider("key", "https://example.test")
+
+    assert created_kwargs["timeout"] == 8.0
+    assert created_kwargs["max_retries"] == 0
 
 
 def test_embedding_router_falls_back_to_local_after_remote_failure():
@@ -220,4 +236,18 @@ def test_router_construction_failure_degrades_instead_of_breaking_run(monkeypatc
     router = module.build_embedding_router(config)
 
     with pytest.raises(module.EmbeddingUnavailable, match="SOCKS 代理依赖缺失"):
+        router.embed_query("普通查询仍应退回 FTS")
+
+
+def test_router_construction_captures_unexpected_local_initialization_failure(monkeypatch, tmp_path):
+    def fail_local(**kwargs):
+        raise RuntimeError("损坏的本地模型缓存")
+
+    monkeypatch.setattr(module, "LocalEmbeddingProvider", fail_local)
+
+    router = module.build_embedding_router(
+        module.EmbeddingConfig(local_cache_dir=tmp_path / "models")
+    )
+
+    with pytest.raises(module.EmbeddingUnavailable, match="损坏的本地模型缓存"):
         router.embed_query("普通查询仍应退回 FTS")

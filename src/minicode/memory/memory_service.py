@@ -310,50 +310,85 @@ class MemoryService:
 
         started_at = perf_counter()
         query = " ".join([task, mode, *active_files])
-        records = {
-            item.id: item
-            for item in self.list_memories("enabled")
-            if item.category in {"rules", "summaries"}
-            and _matches_paths(item.metadata.get("paths", ""), active_files)
-            and not self.filter.contains_sensitive(item.content)
-        }
-        keyword_ids = [
-            memory_id
-            for memory_id in self.keyword_index.search(query, limit=30)
-            if memory_id in records
-        ]
         vector_ids: list[str] = []
         provider = "fts5"
         fallback_reason = ""
         external_transfer = False
+        try:
+            records = {
+                item.id: item
+                for item in self.list_memories("enabled")
+                if item.category in {"rules", "summaries"}
+                and _matches_paths(item.metadata.get("paths", ""), active_files)
+                and not self.filter.contains_sensitive(item.content)
+            }
+        except Exception as exc:
+            records = {}
+            fallback_reason = self._append_fallback_reason(fallback_reason, "memory records", exc)
+        try:
+            keyword_ids = [
+                memory_id
+                for memory_id in self.keyword_index.search(query, limit=30)
+                if memory_id in records
+            ]
+        except Exception as exc:
+            keyword_ids = []
+            fallback_reason = self._append_fallback_reason(fallback_reason, "fts5", exc)
         if self.embedding_router is not None and records:
             try:
                 embedding = self.embedding_router.embed_query(query)
                 provider = embedding.identity.provider
                 external_transfer = embedding.identity.external_transfer
-                fallback_reason = embedding.fallback_reason
-                vector_ids = self._retrieve_vector_ids(embedding, records)
+                fallback_reason = self._append_fallback_reason(
+                    fallback_reason,
+                    "embedding",
+                    embedding.fallback_reason,
+                )
             except Exception as exc:
-                safe_error = self.filter.sanitize(str(exc))
-                fallback_reason = safe_error or "embedding 检索不可用"
+                fallback_reason = self._append_fallback_reason(fallback_reason, "embedding", exc)
                 provider = "fts5"
+            else:
+                try:
+                    vector_ids, pending_count = self._retrieve_vector_ids(embedding, records)
+                    if pending_count:
+                        fallback_reason = self._append_fallback_reason(
+                            fallback_reason,
+                            f"剩余 {pending_count} 条待处理文档",
+                            "",
+                        )
+                except Exception as exc:
+                    fallback_reason = self._append_fallback_reason(fallback_reason, "vector", exc)
+                    provider = "fts5"
+                    external_transfer = False
 
-        ranked_records = [self._as_ranked_memory(record) for record in records.values()]
-        result = self.hybrid_retriever.retrieve(
-            ranked_records,
-            keyword_ids=keyword_ids,
-            vector_ids=vector_ids,
-            active_files=active_files,
-            provider=provider,
-            fallback_reason=fallback_reason,
-            external_transfer=external_transfer,
-            max_tokens=max_tokens,
-        )
+        try:
+            ranked_records = [self._as_ranked_memory(record) for record in records.values()]
+            result = self.hybrid_retriever.retrieve(
+                ranked_records,
+                keyword_ids=keyword_ids,
+                vector_ids=vector_ids,
+                active_files=active_files,
+                provider=provider,
+                fallback_reason=fallback_reason,
+                external_transfer=external_transfer,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            fallback_reason = self._append_fallback_reason(fallback_reason, "memory ranking", exc)
+            result = MemoryRetrievalResult((), provider, fallback_reason, external_transfer, 0)
         medium_ids = [item.memory_id for item in result.items if item.tier == "medium"]
-        self.keyword_index.touch_medium(medium_ids, datetime.now(UTC).isoformat())
+        try:
+            self.keyword_index.touch_medium(medium_ids, datetime.now(UTC).isoformat())
+        except Exception as exc:
+            fallback_reason = self._append_fallback_reason(fallback_reason, "memory hit stats", exc)
+            result = replace(result, fallback_reason=fallback_reason)
         return replace(result, elapsed_ms=round((perf_counter() - started_at) * 1_000, 3))
 
-    def _retrieve_vector_ids(self, embedding: Any, records: dict[str, "MemoryRecord"]) -> list[str]:
+    def _retrieve_vector_ids(
+        self,
+        embedding: Any,
+        records: dict[str, "MemoryRecord"],
+    ) -> tuple[list[str], int]:
         if self.vector_store is None:
             self.vector_store = VectorStore(self.store.root / "chroma")
         hashes = self.vector_store.content_hashes(embedding.identity, self.project_id)
@@ -362,34 +397,42 @@ class MemoryService:
             content_hash = hashlib.sha256(record.content.encode("utf-8")).hexdigest()
             if hashes.get(record.id) != content_hash:
                 pending.append((record, content_hash))
-        if embedding.identity.external_transfer:
-            pending = [
-                (record, content_hash)
-                for record, content_hash in pending
-                if not self.filter.contains_sensitive(record.content)
-            ]
-        if pending:
+        pending = [
+            (record, content_hash)
+            for record, content_hash in pending
+            if not self.filter.contains_sensitive(record.content)
+        ]
+        batch = pending[:32]
+        if batch:
             vectors = self.embedding_router.embed_documents(
                 embedding.identity,
-                [record.content for record, _ in pending],
+                [record.content for record, _ in batch],
             )
             self.vector_store.upsert(
                 embedding.identity,
                 [
                     VectorMemory(record.id, self.project_id, content_hash, vector)
-                    for (record, content_hash), vector in zip(pending, vectors)
+                    for (record, content_hash), vector in zip(batch, vectors)
                 ],
             )
-        return [
-            hit.memory_id
-            for hit in self.vector_store.query(
-                embedding.identity,
-                self.project_id,
-                embedding.vector,
-                limit=30,
-            )
-            if hit.memory_id in records
-        ]
+        return (
+            [
+                hit.memory_id
+                for hit in self.vector_store.query(
+                    embedding.identity,
+                    self.project_id,
+                    embedding.vector,
+                    limit=30,
+                )
+                if hit.memory_id in records
+            ],
+            len(pending) - len(batch),
+        )
+
+    def _append_fallback_reason(self, existing: str, stage: str, error: Exception | str) -> str:
+        detail = self.filter.sanitize(str(error)).strip()
+        value = ": ".join(part for part in (stage, detail) if part)
+        return "; ".join(part for part in (existing, value) if part)
 
     def _as_ranked_memory(self, record: "MemoryRecord") -> RankedMemory:
         created_at = _parse_datetime(record.metadata.get("created_at")) or datetime.now(UTC)

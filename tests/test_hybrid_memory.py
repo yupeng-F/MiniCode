@@ -273,3 +273,48 @@ def test_memory_service_falls_back_to_fts_without_blocking(tmp_path):
     assert result.provider == "fts5"
     assert "embedding 均不可用" in result.fallback_reason
     assert result.rendered == "- Harness 工程底座包含安全执行和质量门禁。"
+
+
+def test_fts_failure_returns_empty_observable_result_when_embedding_is_unavailable(tmp_path):
+    memory = MemoryService(
+        tmp_path / ".minicode" / "memory",
+        embedding_router=FakeEmbeddingRouter(unavailable=True),
+        vector_store=FakeVectorStore(),
+    )
+    memory.store_rule("harness", "Harness 工程底座包含安全执行和质量门禁。")
+    memory.keyword_index.search = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("corrupt"))
+
+    result = memory.retrieve_result("查询", [])
+
+    assert result.items == ()
+    assert "fts5" in result.fallback_reason
+
+
+def test_fts_failure_keeps_vector_results_when_embedding_succeeds(tmp_path):
+    memory = MemoryService(
+        tmp_path / ".minicode" / "memory",
+        embedding_router=FakeEmbeddingRouter(),
+        vector_store=FakeVectorStore(),
+    )
+    memory.store_rule("semantic", "发布前必须执行质量门禁。")
+    memory.keyword_index.search = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("corrupt"))
+
+    result = memory.retrieve_result("查询", [])
+
+    assert [item.memory_id for item in result.items] == ["semantic"]
+    assert result.provider == "aliyun"
+    assert "fts5" in result.fallback_reason
+
+
+def test_frontend_embedding_indexes_at_most_thirty_two_pending_records(tmp_path):
+    router = FakeEmbeddingRouter()
+    vectors = FakeVectorStore(hits=[])
+    memory = MemoryService(tmp_path / ".minicode" / "memory", embedding_router=router, vector_store=vectors)
+    for index in range(33):
+        memory.store_rule(f"rule-{index}", f"第 {index} 条普通规则")
+
+    result = memory.retrieve_result("普通查询", [])
+
+    assert len(router.document_calls) == 1
+    assert len(router.document_calls[0]) == 32
+    assert "1 条待处理" in result.fallback_reason

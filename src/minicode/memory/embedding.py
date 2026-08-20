@@ -95,14 +95,18 @@ class AliyunEmbeddingProvider:
         *,
         model: str = REMOTE_MODEL,
         dimension: int = REMOTE_DIMENSION,
-        timeout_seconds: float = 8.0,
         client: Any | None = None,
     ) -> None:
         self.identity = EmbeddingIdentity("aliyun", model, dimension, True)
         if client is None:
             from openai import OpenAI
 
-            client = OpenAI(api_key=api_key, base_url=base_url.rstrip("/"), timeout=timeout_seconds)
+            client = OpenAI(
+                api_key=api_key,
+                base_url=base_url.rstrip("/"),
+                timeout=8.0,
+                max_retries=0,
+            )
         self.client = client
 
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
@@ -311,7 +315,7 @@ def build_embedding_router(config: EmbeddingConfig | None = None) -> EmbeddingRo
             model=selected.local_model,
             dimension=selected.local_dimension,
         )
-    except EmbeddingUnavailable as exc:
+    except Exception as exc:
         initialization_errors.append(f"local: {exc}")
     return EmbeddingRouter(
         remote=remote,
