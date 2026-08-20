@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from minicode.memory.embedding import EmbeddingRouter
@@ -306,6 +307,7 @@ class MemoryService:
     ) -> MemoryRetrievalResult:
         """返回带 Provider、降级原因和分项得分的混合检索结果。"""
 
+        started_at = perf_counter()
         query = " ".join([task, mode, *active_files])
         records = {
             item.id: item
@@ -347,7 +349,7 @@ class MemoryService:
         )
         medium_ids = [item.memory_id for item in result.items if item.tier == "medium"]
         self.keyword_index.touch_medium(medium_ids, datetime.now(UTC).isoformat())
-        return result
+        return replace(result, elapsed_ms=round((perf_counter() - started_at) * 1_000, 3))
 
     def _retrieve_vector_ids(self, embedding: Any, records: dict[str, "MemoryRecord"]) -> list[str]:
         if self.vector_store is None:

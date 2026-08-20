@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronRight, CirclePlus, FileCode2, Folder, FolderOpen, PanelRight, RefreshCw, Send, ShieldCheck, Terminal, Trash2, Wrench, X } from "lucide-react";
-import { api, type Capabilities, type DirectoryEntry, type DirectoryListing, type FilePage, type MemoryRecord, type MemoryRetrievalStatus, type Message, type Project, type Session, type SessionSummary } from "./api";
+import { api, type Capabilities, type DirectoryEntry, type DirectoryListing, type EmbeddingCapabilities, type FilePage, type MemoryRecord, type MemoryRetrievalStatus, type Message, type Project, type Session, type SessionSummary } from "./api";
 
 const modes = ["ask", "plan", "act", "review"];
 type ActiveRun = { runId: string; sessionId: string; projectId: string };
@@ -38,6 +38,50 @@ export function embeddingStatusLabel(status?: Pick<MemoryRetrievalStatus, "provi
   if (status.provider === "aliyun") return `阿里云 embedding${status.external_transfer ? " · 内容已发送到阿里云" : ""}${reason}`;
   if (status.provider === "local") return `本地 embedding${reason}`;
   return `关键词检索${reason}`;
+}
+
+export function formatBytes(bytes: number): string {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** unitIndex).toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+export function EmbeddingCapabilitiesCard({ capabilities }: { capabilities?: EmbeddingCapabilities }) {
+  return <section className="memory-card" aria-label="Embedding 能力">
+    <h3>Embedding 能力</h3>
+    {!capabilities ? <div className="memory-card-empty">正在读取配置…</div> : <dl className="capability-grid">
+      <div><dt>远程服务</dt><dd className={capabilities.remote_configured ? "state-ok" : "state-muted"}>{capabilities.remote_configured ? "已配置" : "未配置"}</dd></div>
+      <div><dt>Provider</dt><dd>{capabilities.remote_provider}</dd></div>
+      <div className="capability-wide"><dt>远程模型</dt><dd>{capabilities.remote_model}</dd></div>
+      <div><dt>本地模型</dt><dd className={capabilities.local_installed ? "state-ok" : "state-muted"}>{capabilities.local_installed ? "已安装" : "未安装"}</dd></div>
+      <div><dt>占用空间</dt><dd>{capabilities.local_installed ? formatBytes(capabilities.local_size_bytes) : "—"}</dd></div>
+      <div className="capability-wide"><dt>模型名称</dt><dd>{capabilities.local_model}</dd></div>
+    </dl>}
+  </section>;
+}
+
+export function MemoryRetrievalCard({ status }: { status?: MemoryRetrievalStatus }) {
+  const hits = status?.hits ?? [];
+  return <section className="memory-card" aria-label="本次检索">
+    <h3>本次检索</h3>
+    {!status?.provider ? <div className="memory-card-empty">当前会话尚未执行记忆检索</div> : <>
+      <dl className="retrieval-summary">
+        <div><dt>检索方式</dt><dd>{embeddingStatusLabel(status)}</dd></div>
+        <div><dt>耗时</dt><dd>{status.elapsed_ms === undefined ? "—" : `${status.elapsed_ms.toFixed(1)} ms`}</dd></div>
+        <div><dt>命中</dt><dd>{status.item_count} 条</dd></div>
+      </dl>
+      {hits.length ? <div className="retrieval-hits">{hits.map(hit => <article className="retrieval-hit" key={hit.memory_id}>
+        <header><span>{hit.tier}</span><code>{hit.memory_id}</code></header>
+        <p>{hit.preview}</p>
+        <dl className="score-grid">
+          <div><dt>关键词</dt><dd>{hit.keyword_score.toFixed(3)}</dd></div>
+          <div><dt>向量</dt><dd>{hit.vector_score.toFixed(3)}</dd></div>
+          <div><dt>RRF</dt><dd>{hit.rrf_score.toFixed(3)}</dd></div>
+        </dl>
+      </article>)}</div> : <div className="memory-card-empty">{status.hits === undefined && status.item_count > 0 ? "历史 Run 未记录命中明细" : "本次检索未命中项目记忆"}</div>}
+    </>}
+  </section>;
 }
 
 export function App() {
@@ -233,7 +277,11 @@ export function App() {
         {contextTab === "diff" && <div className="output-list">{tools.filter(tool => ["propose_patch", "apply_patch", "git_diff"].includes(tool.tool_name)).map((tool, index) => <pre key={index}>{tool.result?.preview || tool.result?.summary}</pre>)}</div>}
         {contextTab === "plan" && <div className="output-list">{session?.plan?.length ? session.plan.map((step, index) => <pre key={index}>{index + 1}. {step}</pre>) : <div className="empty">计划将在 plan 模式任务中显示</div>}</div>}
         {contextTab === "output" && <div className="output-list">{tools.length ? tools.map((tool, index) => <pre key={index}><Terminal size={13}/>{tool.result?.summary}</pre>) : <div className="empty">暂无运行输出</div>}</div>}
-        {contextTab === "memory" && <div className="output-list">{memories.length ? memories.map(item => <pre key={item.id}><strong>{item.name}</strong> · {item.status}{"\n"}{item.content}{"\n"}<button onClick={() => project && void api.updateMemory(project.project_id, item.id, { enabled: false }).then(() => api.listMemories(project.project_id)).then(setMemories).catch(report)}>禁用</button> <button onClick={() => project && void api.deleteMemory(project.project_id, item.id).then(() => api.listMemories(project.project_id)).then(setMemories).catch(report)}>删除</button></pre>) : <div className="empty">暂无项目记忆</div>}</div>}
+        {contextTab === "memory" && <div className="memory-panel">
+          <EmbeddingCapabilitiesCard capabilities={capabilities?.embedding}/>
+          <MemoryRetrievalCard status={session?.memory_retrieval}/>
+          <div className="output-list">{memories.length ? memories.map(item => <pre key={item.id}><strong>{item.name}</strong> · {item.status}{"\n"}{item.content}{"\n"}<button onClick={() => project && void api.updateMemory(project.project_id, item.id, { enabled: false }).then(() => api.listMemories(project.project_id)).then(setMemories).catch(report)}>禁用</button> <button onClick={() => project && void api.deleteMemory(project.project_id, item.id).then(() => api.listMemories(project.project_id)).then(setMemories).catch(report)}>删除</button></pre>) : <div className="empty">暂无项目记忆</div>}</div>
+        </div>}
       </div>
     </aside>
     {dialog === "project" && <div className="dialog-backdrop" role="presentation" onMouseDown={() => setDialog(null)}><section className="dialog directory-dialog" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}><header><div><span>选择本地项目</span><small>{browser?.path}</small></div><button title="关闭" onClick={() => setDialog(null)}><X size={16}/></button></header><div className="directory-actions"><button disabled={!browser || browser.path === browser.parent} onClick={() => void browse(browser?.parent)}>上一级</button><button onClick={() => void browse(browser?.path)}>刷新</button></div><div className="directory-list">{browser?.entries.map(item => <button key={item.path} onClick={() => void browse(item.path)}><Folder size={16}/><span>{item.name}</span><ChevronRight size={15}/></button>)}</div><footer><button onClick={() => setDialog(null)}>取消</button><button className="primary" onClick={() => void openProject()}>选择当前文件夹</button></footer></section></div>}

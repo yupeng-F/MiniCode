@@ -24,6 +24,12 @@ dist/
 build/
 data/
 
+
+
 # Frontend dependencies and caches
 node_modules/
 *.tsbuildinfo
+
+
+# 设计文档相关
+docs/

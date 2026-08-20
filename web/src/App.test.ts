@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import * as AppModule from "./App";
 
@@ -19,6 +21,80 @@ describe("Embedding 检索状态", () => {
       .toBe("本地 embedding（阿里云超时）");
     expect(embeddingStatusLabel?.({ provider: "fts5", external_transfer: false, fallback_reason: "未安装本地模型" }))
       .toBe("关键词检索（未安装本地模型）");
+  });
+});
+
+describe("记忆可观测卡片", () => {
+  it("显示远程配置、本地安装状态和占用空间", () => {
+    const Card = (AppModule as unknown as { EmbeddingCapabilitiesCard: React.ComponentType<Record<string, unknown>> }).EmbeddingCapabilitiesCard;
+    const html = renderToStaticMarkup(createElement(Card, {
+      capabilities: {
+        remote_provider: "aliyun",
+        remote_model: "qwen3.7-text-embedding",
+        remote_configured: true,
+        external_transfer: true,
+        local_provider: "fastembed",
+        local_model: "BAAI/bge-small-zh-v1.5",
+        local_installed: true,
+        local_size_bytes: 95_252_480,
+        fallback: "fts5",
+      },
+    }));
+
+    expect(html).toContain("Embedding 能力");
+    expect(html).toContain("已配置");
+    expect(html).toContain("已安装");
+    expect(html).toContain("90.8 MB");
+    expect(html).not.toContain("API Key");
+  });
+
+  it("显示本次检索耗时、命中摘要和三项得分", () => {
+    const Card = (AppModule as unknown as { MemoryRetrievalCard: React.ComponentType<Record<string, unknown>> }).MemoryRetrievalCard;
+    const html = renderToStaticMarkup(createElement(Card, {
+      status: {
+        provider: "aliyun",
+        fallback_reason: "",
+        external_transfer: true,
+        token_count: 32,
+        item_count: 1,
+        elapsed_ms: 18.6,
+        hits: [{
+          memory_id: "readme-goal",
+          tier: "long",
+          preview: "项目目标是构建本地优先的编码 Agent。",
+          keyword_score: 0.72,
+          vector_score: 0.81,
+          rrf_score: 0.79,
+        }],
+      },
+    }));
+
+    expect(html).toContain("本次检索");
+    expect(html).toContain("18.6 ms");
+    expect(html).toContain("项目目标是构建本地优先的编码 Agent。");
+    expect(html).toContain("关键词");
+    expect(html).toContain("向量");
+    expect(html).toContain("RRF");
+    expect(html).toContain("0.720");
+    expect(html).toContain("0.810");
+    expect(html).toContain("0.790");
+  });
+
+  it("旧 Run 缺少明细时不伪造零耗时或未命中状态", () => {
+    const Card = (AppModule as unknown as { MemoryRetrievalCard: React.ComponentType<Record<string, unknown>> }).MemoryRetrievalCard;
+    const html = renderToStaticMarkup(createElement(Card, {
+      status: {
+        provider: "fts5",
+        fallback_reason: "旧检索记录",
+        external_transfer: false,
+        token_count: 20,
+        item_count: 3,
+      },
+    }));
+
+    expect(html).toContain("历史 Run 未记录命中明细");
+    expect(html).not.toContain("0.0 ms");
+    expect(html).not.toContain("本次检索未命中项目记忆");
   });
 });
 

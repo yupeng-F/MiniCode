@@ -26,6 +26,7 @@ from minicode.memory.embedding import (
     EmbeddingConfig,
     build_embedding_router,
     local_embedding_marker,
+    local_embedding_size_bytes,
 )
 from minicode.runtime.harness import HarnessRuntime
 from minicode.runtime.policy_engine import PolicyEngine
@@ -192,6 +193,7 @@ async def capabilities() -> JSONResponse:
             "local_provider": "fastembed",
             "local_model": embedding.local_model,
             "local_installed": local_embedding_marker(embedding.local_cache_dir).is_file(),
+            "local_size_bytes": local_embedding_size_bytes(embedding.local_cache_dir),
             "fallback": "fts5",
         },
     })

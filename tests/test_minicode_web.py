@@ -24,7 +24,16 @@ def test_web_index_reports_architecture():
     assert response.json()["name"] == "MiniCode"
 
 
-def test_web_capabilities_lists_selectable_models_and_token_limits():
+def test_web_capabilities_lists_selectable_models_and_token_limits(tmp_path, monkeypatch):
+    cache = tmp_path / "models"
+    marker = cache / "BAAI__bge-small-zh-v1.5" / ".ready"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("ready", encoding="utf-8")
+    model_file = cache / "models--Qdrant--bge-small-zh-v1.5" / "model.onnx"
+    model_file.parent.mkdir(parents=True)
+    model_file.write_bytes(b"x" * 2048)
+    monkeypatch.setenv("MINICODE_EMBEDDING_CACHE", str(cache))
+
     response = TestClient(app).get("/api/capabilities")
 
     assert response.status_code == 200
@@ -36,6 +45,8 @@ def test_web_capabilities_lists_selectable_models_and_token_limits():
     assert response.json()["token_limits"] == {"input": 48_000, "output": 8_000, "user_message": 12_000}
     assert response.json()["embedding"]["remote_model"] == "qwen3.7-text-embedding"
     assert response.json()["embedding"]["local_model"] == "BAAI/bge-small-zh-v1.5"
+    assert response.json()["embedding"]["local_installed"] is True
+    assert response.json()["embedding"]["local_size_bytes"] >= 2048
     assert "api_key" not in str(response.json()["embedding"]).lower()
 
 

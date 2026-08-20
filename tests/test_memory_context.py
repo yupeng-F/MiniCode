@@ -5,7 +5,7 @@ import pytest
 from minicode.context.context_manager import ContextManager
 from minicode.context.token_budget import UserMessageTooLarge
 from minicode.memory.memory_service import MemoryService
-from minicode.memory.hybrid_retriever import MemoryRetrievalResult
+from minicode.memory.hybrid_retriever import MemoryRetrievalItem, MemoryRetrievalResult
 from minicode.schemas.session import Message, SessionState
 from minicode.schemas.tool import ToolCall, ToolCallRecord, ToolResult
 
@@ -47,7 +47,19 @@ def test_context_passes_task_files_and_mode_and_records_retrieval_status(tmp_pat
 
     def retrieve_result(task, active_files, mode="act", max_tokens=4_000):
         calls.append((task, active_files, mode, max_tokens))
-        return MemoryRetrievalResult((), "local", "阿里云超时", False, 0)
+        item = MemoryRetrievalItem(
+            memory_id="readme-goal",
+            project_id="project-a",
+            content="项目目标是构建本地优先的编码 Agent。" * 20,
+            tier="long",
+            vector_score=0.81,
+            keyword_score=0.72,
+            path_score=0.5,
+            recency_score=1.0,
+            usefulness_score=0.4,
+            final_score=0.79,
+        )
+        return MemoryRetrievalResult((item,), "local", "阿里云超时", False, 100, 18.6)
 
     memory.retrieve_result = retrieve_result  # type: ignore[method-assign]
     session = SessionState(task="检查 README", mode="review", active_files=["README.md"])
@@ -59,8 +71,17 @@ def test_context_passes_task_files_and_mode_and_records_retrieval_status(tmp_pat
         "provider": "local",
         "fallback_reason": "阿里云超时",
         "external_transfer": False,
-        "token_count": 0,
-        "item_count": 0,
+        "token_count": 100,
+        "item_count": 1,
+        "elapsed_ms": 18.6,
+        "hits": [{
+            "memory_id": "readme-goal",
+            "tier": "long",
+            "preview": ("项目目标是构建本地优先的编码 Agent。" * 20)[:160],
+            "keyword_score": 0.72,
+            "vector_score": 0.81,
+            "rrf_score": 0.79,
+        }],
     }
 
 

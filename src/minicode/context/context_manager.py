@@ -108,6 +108,18 @@ class ContextManager:
                 "external_transfer": memory_result.external_transfer,
                 "token_count": memory_result.token_count,
                 "item_count": len(memory_result.items),
+                "elapsed_ms": memory_result.elapsed_ms,
+                "hits": [
+                    {
+                        "memory_id": item.memory_id,
+                        "tier": item.tier,
+                        "preview": item.content[:160],
+                        "keyword_score": item.keyword_score,
+                        "vector_score": item.vector_score,
+                        "rrf_score": item.final_score,
+                    }
+                    for item in memory_result.items
+                ],
             }
             if memory_result.rendered:
                 projection.memory = self._fit_section("memory", memory_result.rendered, projection)

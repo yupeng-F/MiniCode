@@ -127,6 +127,23 @@ def local_embedding_marker(cache_dir: Path | str) -> Path:
     return Path(cache_dir) / model_directory / ".ready"
 
 
+def local_embedding_size_bytes(cache_dir: Path | str) -> int:
+    """统计本地模型缓存实际文件大小，跳过符号链接和不可读文件。"""
+
+    selected_cache = Path(cache_dir)
+    if not local_embedding_marker(selected_cache).is_file() or not selected_cache.is_dir():
+        return 0
+    total = 0
+    for path in selected_cache.rglob("*"):
+        try:
+            if path.is_symlink() or not path.is_file():
+                continue
+            total += path.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
 def _create_fastembed_model(**kwargs: Any) -> Any:
     """延迟导入可选依赖，避免仅使用远程服务时强制安装本地模型运行时。"""
 

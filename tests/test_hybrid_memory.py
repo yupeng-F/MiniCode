@@ -188,6 +188,22 @@ def test_memory_service_returns_observable_hybrid_result(tmp_path):
     assert memory.retrieve("如何验证 Python 改动", ["src/app.py"]) == result.rendered
 
 
+def test_memory_service_reports_complete_retrieval_elapsed_time(tmp_path, monkeypatch):
+    router = FakeEmbeddingRouter()
+    memory = MemoryService(
+        tmp_path / ".minicode" / "memory",
+        embedding_router=router,
+        vector_store=FakeVectorStore(),
+    )
+    memory.store_rule("python", "Python 改动完成后运行 pytest。")
+    clock = iter([100.0, 100.1234])
+    monkeypatch.setattr("minicode.memory.memory_service.perf_counter", lambda: next(clock))
+
+    result = memory.retrieve_result("如何验证 Python 改动", ["src/app.py"])
+
+    assert result.elapsed_ms == pytest.approx(123.4)
+
+
 def test_memory_service_falls_back_to_fts_without_blocking(tmp_path):
     memory = MemoryService(
         tmp_path / ".minicode" / "memory",

@@ -44,6 +44,7 @@ class MemoryRetrievalResult:
     fallback_reason: str
     external_transfer: bool
     token_count: int
+    elapsed_ms: float = 0.0
 
     @property
     def rendered(self) -> str:
