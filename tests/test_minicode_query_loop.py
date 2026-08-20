@@ -4,6 +4,7 @@ from pathlib import Path
 
 from minicode.application.run_service import RunService
 from minicode.engine.model_client import JsonScriptModel
+from minicode.memory.memory_service import MemoryService
 from minicode.storage.sqlite_store import SQLiteStore
 
 
@@ -34,6 +35,44 @@ def test_run_service_persists_session(tmp_path: Path):
 
     assert loaded is not None
     assert loaded.final_answer == "Done."
+
+
+def test_run_service_creates_retrievable_medium_term_summary(tmp_path: Path):
+    model = JsonScriptModel([{"type": "final", "content": "README 说明了本地编码 Agent 的目标。"}])
+    service = RunService(workspace=str(tmp_path), model=model)
+
+    session = service.run("README 的项目目标是什么", mode="ask")
+    memory = MemoryService(tmp_path / ".minicode" / "memory")
+
+    summary = memory.get_memory(session.run_id)
+    assert summary is not None
+    assert summary.category == "summaries"
+    assert "README 的项目目标是什么" in memory.retrieve("此前 README 项目目标", [], mode="ask")
+
+
+def test_query_loop_records_context_budget_usage_on_session(tmp_path: Path):
+    model = JsonScriptModel([{"type": "final", "content": "已完成。"}])
+    service = RunService(workspace=str(tmp_path), model=model)
+
+    session = service.run("检查上下文预算", mode="ask")
+
+    assert session.context_usage["current_task"] > 0
+    assert session.context_usage["total"] <= 48_000
+    assert session.context_dropped == []
+
+
+def test_query_loop_emits_context_usage_without_prompt_content(tmp_path: Path):
+    model = JsonScriptModel([{"type": "final", "content": "已完成。"}])
+    service = RunService(workspace=str(tmp_path), model=model)
+    events = []
+    service.loop.event_sink = events.append
+
+    service.run("不要把这段任务正文放入遥测事件", mode="ask")
+
+    context_event = next(event for event in events if event.type == "context_built")
+    assert context_event.payload["usage"]["total"] <= 48_000
+    assert context_event.payload["dropped"] == []
+    assert "不要把这段任务正文放入遥测事件" not in str(context_event.payload)
 
 
 def test_query_loop_recovers_from_a_repeated_read_only_tool_call(tmp_path: Path):

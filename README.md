@@ -35,9 +35,12 @@ Tool-Use Loop + Harness Runtime + Context Management + Markdown Memory
 - daemon 重启后可恢复会话、事件和待审批调用；原子审批 claim 防止重复执行已批准的副作用
 - SSE 使用持久化事件回放，浏览器刷新后可恢复最近的项目、会话和活动 Run
 - 项目隔离的 Markdown Memory 支持候选、去重、晋升、冲突替换、禁用和删除
+- Memory 使用关键词与向量混合排序，优先调用阿里云 embedding，敏感内容或远程失败时降级到已安装的本地模型，再降级到 FTS5
+- TokenBudget 已接入上下文构建，限制单条用户消息、总输入、模型输出和各上下文分区
 - `task_agent` 提供有独立上下文、工具白名单和轮次/工具预算的只读 explorer/reviewer SubAgent
 - append-only Trace/Audit 在写入前执行敏感信息过滤；JSON Eval Runner 可生成可重复的机器可读报告
-- React + TypeScript + Vite 三栏工作台支持项目、会话、文件、工具时间线、审批以及 Memory 管理
+- React + TypeScript + Vite 三栏工作台支持模型切换、Enter 发送、项目文件浏览、工具时间线、审批以及 Memory 管理
+- 记忆面板显示远程配置、本地模型安装状态与占用空间，以及本次检索耗时、命中摘要和关键词/向量/RRF 得分
 
 当前成熟度是 **产品化 Alpha / 可靠性基线**，不是稳定版。后续重点包括：
 
@@ -54,8 +57,14 @@ Tool-Use Loop + Harness Runtime + Context Management + Markdown Memory
 后端在项目根目录启动：
 
 ```bash
-conda run -n LLM python -m minicode.interfaces.web.server --host 127.0.0.1 --port 8080
+env PYTHONPATH="$PWD/src" conda run -n LLM \
+  python -m minicode.interfaces.web.server \
+  --host 127.0.0.1 --port 8080
 ```
+
+显式设置 `PYTHONPATH` 可确保加载当前仓库的 `src/minicode`，避免 Conda
+环境中已有的 editable install 指向其他 worktree。如果看到
+`address already in use`，说明已有后端占用 `8080`，不要重复启动。
 
 前端在另一个终端启动：
 

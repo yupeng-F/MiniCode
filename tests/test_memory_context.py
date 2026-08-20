@@ -1,9 +1,102 @@
 from __future__ import annotations
 
+import pytest
+
 from minicode.context.context_manager import ContextManager
+from minicode.context.token_budget import UserMessageTooLarge
 from minicode.memory.memory_service import MemoryService
+from minicode.memory.hybrid_retriever import MemoryRetrievalItem, MemoryRetrievalResult
 from minicode.schemas.session import Message, SessionState
 from minicode.schemas.tool import ToolCall, ToolCallRecord, ToolResult
+
+
+def test_context_projection_reports_partition_usage_without_repeating_current_task():
+    session = SessionState(task="当前项目的 README 说明项目的目标是什么")
+    session.messages = [
+        Message(role="assistant", content="上一轮回答"),
+        Message(role="user", content=session.task),
+    ]
+
+    projection = ContextManager().build(session, tool_descriptions=["- read_file: 读取文件"])
+
+    assert projection.current_task == session.task
+    assert session.task not in projection.recent_messages
+    assert "上一轮回答" in projection.recent_messages
+    assert projection.usage["current_task"] > 0
+    assert projection.usage["system_and_tools"] > 0
+    assert projection.total_tokens <= 48_000
+    assert session.task in projection.render()
+
+
+def test_current_task_is_rendered_after_conversation_history():
+    session = SessionState(task="现在回答 README 的项目目标")
+    session.messages = [
+        Message(role="user", content="旧任务：继续修改 probe 文件"),
+        Message(role="assistant", content="旧任务已经完成"),
+        Message(role="user", content=session.task),
+    ]
+
+    rendered = ContextManager().build(session).render()
+
+    assert rendered.rfind(session.task) > rendered.rfind("旧任务已经完成")
+
+
+def test_context_passes_task_files_and_mode_and_records_retrieval_status(tmp_path):
+    memory = MemoryService(tmp_path / ".minicode" / "memory")
+    calls = []
+
+    def retrieve_result(task, active_files, mode="act", max_tokens=4_000):
+        calls.append((task, active_files, mode, max_tokens))
+        item = MemoryRetrievalItem(
+            memory_id="readme-goal",
+            project_id="project-a",
+            content="项目目标是构建本地优先的编码 Agent。" * 20,
+            tier="long",
+            vector_score=0.81,
+            keyword_score=0.72,
+            path_score=0.5,
+            recency_score=1.0,
+            usefulness_score=0.4,
+            final_score=0.79,
+        )
+        return MemoryRetrievalResult((item,), "local", "阿里云超时", False, 100, 18.6)
+
+    memory.retrieve_result = retrieve_result  # type: ignore[method-assign]
+    session = SessionState(task="检查 README", mode="review", active_files=["README.md"])
+
+    ContextManager(memory_service=memory).build(session)
+
+    assert calls == [("检查 README", ["README.md"], "review", 4_000)]
+    assert session.memory_retrieval == {
+        "provider": "local",
+        "fallback_reason": "阿里云超时",
+        "external_transfer": False,
+        "token_count": 100,
+        "item_count": 1,
+        "elapsed_ms": 18.6,
+        "hits": [{
+            "memory_id": "readme-goal",
+            "tier": "long",
+            "preview": ("项目目标是构建本地优先的编码 Agent。" * 20)[:160],
+            "keyword_score": 0.72,
+            "vector_score": 0.81,
+            "rrf_score": 0.79,
+        }],
+    }
+
+
+def test_context_projection_rejects_oversized_current_task_before_model_call():
+    session = SessionState(task="x")
+    manager = ContextManager()
+
+    class OversizedCounter:
+        def count(self, value: object) -> int:
+            return 12_001
+
+    manager.token_counter = OversizedCounter()
+
+    with pytest.raises(UserMessageTooLarge):
+        manager.build(session)
 
 
 def test_context_compacts_old_messages_and_redacts_sensitive_values(tmp_path):
@@ -57,6 +150,19 @@ def test_memory_captures_verified_test_command(tmp_path):
     memory.capture_verified_test_command("conda run -n LLM python -m pytest -q")
 
     assert "conda run -n LLM python -m pytest -q" in memory.retrieve("Run tests", [])
+
+
+def test_user_instruction_is_reviewable_candidate_until_promoted(tmp_path):
+    memory = MemoryService(tmp_path / ".minicode" / "memory")
+
+    captured = memory.capture_user_instruction("必须只修改 eval/results/browser_e2e_probe.md")
+
+    assert captured is True
+    records = memory.list_memories()
+    assert len(records) == 1
+    assert records[0].status == "candidate"
+    assert records[0].metadata["source"] == "user_instruction"
+    assert memory.retrieve("Read README", []) == ""
 
 
 def test_context_keeps_recent_read_content_and_pagination_metadata():

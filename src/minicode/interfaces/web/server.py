@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import queue
@@ -12,12 +13,21 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from minicode.application.project_service import ProjectService
-from minicode.application.session_service import SessionService
+from minicode.application.session_service import ActiveRunModelSwitchError, SessionService
 from minicode.context.artifact_store import ArtifactStore
 from minicode.context.context_manager import ContextManager
+from minicode.context.token_budget import TokenBudget, UserMessageTooLarge
+from minicode.context.token_counter import TokenCounter
+from minicode.engine.model_catalog import DEFAULT_MODEL_ID, MODEL_PROFILES
 from minicode.engine.model_factory import ModelFactory
 from minicode.engine.query_loop import QueryLoop
 from minicode.memory.memory_service import MemoryService
+from minicode.memory.embedding import (
+    EmbeddingConfig,
+    build_embedding_router,
+    local_embedding_marker,
+    local_embedding_size_bytes,
+)
 from minicode.runtime.harness import HarnessRuntime
 from minicode.runtime.policy_engine import PolicyEngine
 from minicode.runtime.tool_executor import ToolExecutor
@@ -38,6 +48,7 @@ class RunRequest(BaseModel):
     mode: str | None = None
     workspace: str = "."
     session_id: str | None = None
+    model_id: str | None = None
 
 
 class ProjectRequest(BaseModel):
@@ -48,6 +59,11 @@ class ProjectRequest(BaseModel):
 class SessionRequest(BaseModel):
     input: str
     mode: str = "act"
+    model_id: str = DEFAULT_MODEL_ID
+
+
+class ModelUpdateRequest(BaseModel):
+    model_id: str
 
 
 class ApprovalRequest(BaseModel):
@@ -75,6 +91,28 @@ def _project_service() -> ProjectService:
 
 def _session_service() -> SessionService:
     return SessionService(_global_store())
+
+
+def _validate_user_input(content: str) -> int:
+    counter = getattr(app.state, "token_counter", None) or TokenCounter()
+    try:
+        return TokenBudget().validate_user_message(content, counter=counter)
+    except UserMessageTooLarge as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "user_message_too_large",
+                "limit": exc.limit,
+                "actual": exc.actual,
+            },
+        ) from exc
+
+
+def _model_for_run(model_id: str):
+    model_factory = getattr(app.state, "model_factory", ModelFactory.from_environment)
+    if not inspect.signature(model_factory).parameters:
+        return model_factory()
+    return model_factory(model_id)
 
 
 def _restore_run(run_id: str) -> dict | None:
@@ -132,6 +170,32 @@ async def index() -> JSONResponse:
     return JSONResponse({
         "name": "MiniCode",
         "architecture": "Tool-Use Loop + Harness Runtime + Context Management + Markdown Memory",
+    })
+
+
+@app.get("/api/capabilities")
+async def capabilities() -> JSONResponse:
+    budget = TokenBudget()
+    embedding = EmbeddingConfig.from_environment()
+    return JSONResponse({
+        "default_model": DEFAULT_MODEL_ID,
+        "models": [profile.model_dump() for profile in MODEL_PROFILES],
+        "token_limits": {
+            "input": budget.max_input_tokens,
+            "output": budget.max_output_tokens,
+            "user_message": budget.max_user_message_tokens,
+        },
+        "embedding": {
+            "remote_provider": "aliyun",
+            "remote_model": embedding.remote_model,
+            "remote_configured": bool(embedding.api_key),
+            "external_transfer": True,
+            "local_provider": "fastembed",
+            "local_model": embedding.local_model,
+            "local_installed": local_embedding_marker(embedding.local_cache_dir).is_file(),
+            "local_size_bytes": local_embedding_size_bytes(embedding.local_cache_dir),
+            "fallback": "fts5",
+        },
     })
 
 
@@ -232,6 +296,14 @@ def _project_memory(project_id: str) -> MemoryService:
     return MemoryService(workspace.root / ".minicode" / "memory")
 
 
+def _run_memory(workspace: WorkspaceManager) -> MemoryService:
+    factory = getattr(app.state, "embedding_router_factory", build_embedding_router)
+    return MemoryService(
+        workspace.root / ".minicode" / "memory",
+        embedding_router=factory(),
+    )
+
+
 @app.get("/api/projects/{project_id}/memories")
 async def list_project_memories(project_id: str) -> JSONResponse:
     return JSONResponse([
@@ -244,10 +316,18 @@ async def list_project_memories(project_id: str) -> JSONResponse:
 @app.patch("/api/projects/{project_id}/memories/{memory_id}")
 async def update_project_memory(project_id: str, memory_id: str, req: MemoryUpdateRequest) -> JSONResponse:
     memory = _project_memory(project_id)
-    if req.enabled is False:
-        changed = memory.disable_memory(memory_id)
-    else:
+    if req.enabled is None:
         changed = memory.update_memory(memory_id, content=req.content, name=req.name, paths=req.paths)
+    else:
+        has_edits = any(value is not None for value in (req.content, req.name, req.paths))
+        changed = memory.update_memory(
+            memory_id,
+            content=req.content,
+            name=req.name,
+            paths=req.paths,
+        ) if has_edits else True
+        if changed:
+            changed = memory.enable_memory(memory_id) if req.enabled else memory.disable_memory(memory_id)
     if not changed:
         raise HTTPException(status_code=404, detail="Memory not found or update rejected")
     item = memory.get_memory(memory_id)
@@ -271,12 +351,16 @@ async def list_sessions(project_id: str) -> JSONResponse:
 
 @app.post("/api/projects/{project_id}/sessions")
 async def create_session(project_id: str, req: SessionRequest) -> JSONResponse:
+    _validate_user_input(req.input)
     project = _project_service().get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     if req.mode not in {"ask", "plan", "act", "review"}:
         raise HTTPException(status_code=400, detail="Unsupported session mode")
-    session = _session_service().create(project, req.input, req.mode)
+    try:
+        session = _session_service().create(project, req.input, req.mode, req.model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return JSONResponse(session.model_dump())
 
 
@@ -285,6 +369,17 @@ async def get_session(session_id: str) -> JSONResponse:
     session = _session_service().get_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    return JSONResponse(session.model_dump())
+
+
+@app.patch("/api/sessions/{session_id}/model")
+async def update_session_model(session_id: str, req: ModelUpdateRequest) -> JSONResponse:
+    try:
+        session = _session_service().select_model(session_id, req.model_id)
+    except ActiveRunModelSwitchError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return JSONResponse(session.model_dump())
 
 
@@ -301,6 +396,7 @@ async def delete_session(session_id: str) -> Response:
 
 @app.post("/api/runs")
 async def create_run(req: RunRequest) -> JSONResponse:
+    _validate_user_input(req.input)
     projects = _project_service()
     sessions = _session_service()
     if req.session_id:
@@ -312,6 +408,11 @@ async def create_run(req: RunRequest) -> JSONResponse:
             raise HTTPException(status_code=404, detail="Project not found for session")
         if sessions.store.active_run_for_session(req.session_id):
             raise HTTPException(status_code=409, detail="Session already has an active run")
+        if req.model_id:
+            try:
+                sessions.select_model(req.session_id, req.model_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
         session = sessions.start_run(req.session_id, req.input, req.mode)
         workspace = WorkspaceManager(session.workspace)
     else:
@@ -320,7 +421,10 @@ async def create_run(req: RunRequest) -> JSONResponse:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         mode = req.mode or "act"
-        session = sessions.create(project, req.input, mode)
+        try:
+            session = sessions.create(project, req.input, mode, req.model_id or DEFAULT_MODEL_ID)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         workspace = WorkspaceManager(project.workspace)
     events: queue.Queue = queue.Queue()
 
@@ -406,12 +510,11 @@ def _run_background(session: SessionState, workspace: WorkspaceManager, events: 
         events.put(event)
 
     try:
-        model_factory = getattr(app.state, "model_factory", ModelFactory.from_environment)
-        model = model_factory()
+        model = _model_for_run(session.run_model_id or session.model_id)
         _runs[session.run_id]["model"] = model
         registry = build_default_registry()
         artifacts = ArtifactStore(workspace.root / ".minicode")
-        memory = MemoryService(workspace.root / ".minicode" / "memory")
+        memory = _run_memory(workspace)
         runtime = HarnessRuntime(registry, PolicyEngine(), ToolExecutor(workspace, artifacts, task_agent_model=model))
         loop = QueryLoop(model, runtime, ContextManager(memory_service=memory), memory, sink)
         result = loop.run(session)
@@ -446,11 +549,10 @@ def _resolve_approval_background(run_id: str, approved: bool) -> None:
     try:
         model = run.get("model")
         if model is None:
-            model_factory = getattr(app.state, "model_factory", ModelFactory.from_environment)
-            model = model_factory()
+            model = _model_for_run(session.run_model_id or session.model_id)
         registry = build_default_registry()
         artifacts = ArtifactStore(workspace.root / ".minicode")
-        memory = MemoryService(workspace.root / ".minicode" / "memory")
+        memory = _run_memory(workspace)
         runtime = HarnessRuntime(registry, PolicyEngine(), ToolExecutor(workspace, artifacts, task_agent_model=model))
         loop = QueryLoop(model, runtime, ContextManager(memory_service=memory), memory, sink)
         result = loop.resume_approved(session) if approved else loop.reject_pending(session)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import time
 from pathlib import Path
 
@@ -40,6 +41,41 @@ def test_global_store_persists_run_events_and_atomically_claims_approval(tmp_pat
     assert store.claim_approval(session.run_id) is False
 
 
+def test_global_store_migrates_and_persists_session_and_run_models(tmp_path: Path):
+    db_path = tmp_path / "minicode.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE sessions (session_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, "
+            "run_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, "
+            "updated_at TEXT NOT NULL, payload TEXT NOT NULL)"
+        )
+        conn.execute(
+            "CREATE TABLE runs (run_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, "
+            "project_id TEXT NOT NULL, workspace TEXT NOT NULL, status TEXT NOT NULL, "
+            "payload TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+
+    store = GlobalStore(db_path)
+    session = SessionState(
+        workspace=str(tmp_path),
+        model_id="deepseek-v4-pro",
+        run_model_id="deepseek-v4-pro",
+    )
+    store.save_session("project-1", session)
+    store.save_run("project-1", session)
+
+    with sqlite3.connect(db_path) as conn:
+        session_model = conn.execute(
+            "SELECT model_id FROM sessions WHERE session_id = ?", (session.session_id,)
+        ).fetchone()[0]
+        run_model = conn.execute(
+            "SELECT model_id FROM runs WHERE run_id = ?", (session.run_id,)
+        ).fetchone()[0]
+
+    assert session_model == "deepseek-v4-pro"
+    assert run_model == "deepseek-v4-pro"
+
+
 def test_daemon_restart_restores_pending_approval_and_executes_it_once(tmp_path: Path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -76,10 +112,12 @@ def test_daemon_restart_restores_pending_approval_and_executes_it_once(tmp_path:
     assert (workspace / "marker.txt").read_text(encoding="utf-8") == "x"
     assert [event.type for _, event in GlobalStore(server.app.state.global_store_path).list_events(run_id)] == [
         "run_started",
+        "context_built",
         "tool_call_created",
         "approval_required",
         "tool_call_finished",
         "run_started",
+        "context_built",
         "run_completed",
     ]
 

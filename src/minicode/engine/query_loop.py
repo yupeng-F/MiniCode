@@ -52,13 +52,25 @@ class QueryLoop:
         for _ in range(self.max_steps):
             visible = self.runtime.registry.visible_tools(session.mode, self.role)
             use_native_history = self.model.supports_native_tool_history
-            context = self.context_manager.build(
+            projection = self.context_manager.build(
                 session,
                 describe_tools(visible),
                 include_tool_results=not use_native_history,
             )
+            session.context_usage = {**projection.usage, "total": projection.total_tokens}
+            session.context_dropped = list(projection.dropped)
+            self.event_sink(Event(
+                type="context_built",
+                run_id=session.run_id,
+                summary=f"模型上下文共 {projection.total_tokens} tokens",
+                payload={
+                    "usage": dict(session.context_usage),
+                    "dropped": list(session.context_dropped),
+                    "memory_retrieval": dict(session.memory_retrieval),
+                },
+            ))
             response = self.model.complete(
-                context,
+                projection.render(),
                 tool_specs_for_model(visible),
                 tool_history=session.tool_calls if use_native_history else None,
             )
@@ -68,11 +80,11 @@ class QueryLoop:
                 session.messages.append(Message(role="assistant", content=response.content))
                 session.status = "completed"
                 self.event_sink(Event(type="run_completed", run_id=session.run_id, summary=response.content[:160]))
-                return session
+                return self._finalize_terminal(session)
 
             if response.tool_call is None:
                 session.status = "failed"
-                return session
+                return self._finalize_terminal(session)
 
             call = response.tool_call
             call.mode = session.mode
@@ -83,7 +95,7 @@ class QueryLoop:
                     session.status = "failed"
                     session.final_answer = "Stopped after the model ignored duplicate-read recovery guidance twice."
                     self.event_sink(Event(type="run_failed", run_id=session.run_id, summary=session.final_answer))
-                    return session
+                    return self._finalize_terminal(session)
                 self.event_sink(Event(
                     type="tool_call_created",
                     run_id=session.run_id,
@@ -143,7 +155,7 @@ class QueryLoop:
         session.status = "failed"
         session.final_answer = "Stopped after max tool-use steps without reaching a final answer."
         self.event_sink(Event(type="run_failed", run_id=session.run_id, summary=session.final_answer))
-        return session
+        return self._finalize_terminal(session)
 
     def resume_approved(self, session: SessionState) -> SessionState:
         call = session.pending_tool_call
@@ -171,7 +183,7 @@ class QueryLoop:
         session.status = "cancelled"
         session.final_answer = "Tool call rejected by user."
         self.event_sink(Event(type="run_completed", run_id=session.run_id, summary=session.final_answer))
-        return session
+        return self._finalize_terminal(session)
 
     @staticmethod
     def _replace_call_record(session: SessionState, replacement: ToolCallRecord) -> None:
@@ -292,4 +304,10 @@ class QueryLoop:
         session.messages.append(Message(role="assistant", content=session.final_answer))
         session.status = "completed"
         self.event_sink(Event(type="run_completed", run_id=session.run_id, summary=session.final_answer[:160]))
+        return self._finalize_terminal(session)
+
+    def _finalize_terminal(self, session: SessionState) -> SessionState:
+        if self.memory_service and session.status in {"completed", "failed", "cancelled"}:
+            self.memory_service.store_run_summary(session)
+            self.memory_service.enforce_retention()
         return session

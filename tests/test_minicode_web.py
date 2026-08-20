@@ -7,6 +7,15 @@ from fastapi.testclient import TestClient
 from minicode.engine.model_client import JsonScriptModel
 from minicode.interfaces.web.server import app
 from minicode.memory.memory_service import MemoryService
+from minicode.schemas.session import SessionState
+
+
+class FixedTokenCounter:
+    def __init__(self, token_count: int) -> None:
+        self.token_count = token_count
+
+    def count(self, value: object) -> int:
+        return self.token_count
 
 
 def test_web_index_reports_architecture():
@@ -14,6 +23,101 @@ def test_web_index_reports_architecture():
     response = client.get("/")
     assert response.status_code == 200
     assert response.json()["name"] == "MiniCode"
+
+
+def test_web_capabilities_lists_selectable_models_and_token_limits(tmp_path, monkeypatch):
+    cache = tmp_path / "models"
+    marker = cache / "BAAI__bge-small-zh-v1.5" / ".ready"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("ready", encoding="utf-8")
+    model_file = cache / "models--Qdrant--bge-small-zh-v1.5" / "model.onnx"
+    model_file.parent.mkdir(parents=True)
+    model_file.write_bytes(b"x" * 2048)
+    monkeypatch.setenv("MINICODE_EMBEDDING_CACHE", str(cache))
+
+    response = TestClient(app).get("/api/capabilities")
+
+    assert response.status_code == 200
+    assert response.json()["default_model"] == "deepseek-v4-flash"
+    assert [item["id"] for item in response.json()["models"]] == [
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+    ]
+    assert response.json()["token_limits"] == {"input": 48_000, "output": 8_000, "user_message": 12_000}
+    assert response.json()["embedding"]["remote_model"] == "qwen3.7-text-embedding"
+    assert response.json()["embedding"]["local_model"] == "BAAI/bge-small-zh-v1.5"
+    assert response.json()["embedding"]["local_installed"] is True
+    assert response.json()["embedding"]["local_size_bytes"] >= 2048
+    assert "api_key" not in str(response.json()["embedding"]).lower()
+
+
+def test_web_session_accepts_selected_model_and_rejects_unknown_model(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+
+    selected = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "检查项目", "mode": "ask", "model_id": "deepseek-v4-pro"},
+    )
+    rejected = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "检查项目", "mode": "ask", "model_id": "unknown-model"},
+    )
+
+    assert selected.status_code == 200
+    assert selected.json()["model_id"] == "deepseek-v4-pro"
+    assert rejected.status_code == 422
+
+
+def test_web_run_uses_pinned_model_and_blocks_switch_while_active(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    selected_models: list[str] = []
+
+    def model_factory(model_id: str):
+        selected_models.append(model_id)
+        return JsonScriptModel([{
+            "type": "tool_use",
+            "tool_call": {"tool_name": "bash", "arguments": {"command": "pwd"}},
+        }])
+
+    app.state.model_factory = model_factory
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    session = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "检查项目", "mode": "act", "model_id": "deepseek-v4-pro"},
+    ).json()
+
+    created = client.post(
+        "/api/runs",
+        json={"session_id": session["session_id"], "input": "执行检查"},
+    ).json()
+
+    import time
+
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        state = client.get(f"/api/runs/{created['run_id']}").json()
+        if state["status"] == "waiting_approval":
+            break
+        time.sleep(0.02)
+    else:
+        raise AssertionError("Run 未进入等待审批状态")
+
+    blocked = client.patch(
+        f"/api/sessions/{session['session_id']}/model",
+        json={"model_id": "deepseek-v4-flash"},
+    )
+    run_state = client.get(f"/api/runs/{created['run_id']}").json()
+
+    assert selected_models == ["deepseek-v4-pro"]
+    assert run_state["run_model_id"] == "deepseek-v4-pro"
+    assert blocked.status_code == 409
 
 
 def test_web_creates_project_and_persistent_session(tmp_path: Path):
@@ -35,6 +139,46 @@ def test_web_creates_project_and_persistent_session(tmp_path: Path):
     assert session_response.status_code == 200
     assert sessions_response.status_code == 200
     assert sessions_response.json()[0]["title"] == "Inspect tests"
+
+
+def test_web_rejects_oversized_input_before_creating_session_or_run(tmp_path: Path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    monkeypatch.setattr(app.state, "token_counter", FixedTokenCounter(12_001), raising=False)
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+
+    session_response = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "超长消息", "mode": "ask"},
+    )
+    run_response = client.post(
+        "/api/runs",
+        json={"workspace": str(workspace), "input": "超长消息", "mode": "ask"},
+    )
+
+    expected = {"code": "user_message_too_large", "limit": 12_000, "actual": 12_001}
+    assert session_response.status_code == 422
+    assert session_response.json()["detail"] == expected
+    assert run_response.status_code == 422
+    assert run_response.json()["detail"] == expected
+
+
+def test_web_accepts_input_at_token_limit(tmp_path: Path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    monkeypatch.setattr(app.state, "token_counter", FixedTokenCounter(12_000), raising=False)
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+
+    response = client.post(
+        f"/api/projects/{project['project_id']}/sessions",
+        json={"input": "边界消息", "mode": "ask"},
+    )
+
+    assert response.status_code == 200
 
 
 def test_web_reuses_existing_session_when_starting_a_run(tmp_path: Path):
@@ -130,3 +274,98 @@ def test_web_manages_project_memory(tmp_path: Path):
     assert listed.json()[0]["content"] == "Always run pytest."
     assert disabled.json()["status"] == "disabled"
     assert deleted.status_code == 204
+
+
+def test_web_reenables_summary_memory_and_persists_it(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    memory = MemoryService(workspace / ".minicode" / "memory")
+    session = SessionState(
+        run_id="web-summary",
+        task="恢复检索",
+        status="completed",
+        final_answer="恢复后的摘要",
+    )
+    assert memory.store_run_summary(session)
+    assert client.patch(
+        f"/api/projects/{project['project_id']}/memories/{session.run_id}",
+        json={"enabled": False},
+    ).json()["status"] == "disabled"
+
+    enabled = client.patch(
+        f"/api/projects/{project['project_id']}/memories/{session.run_id}",
+        json={"enabled": True},
+    )
+
+    assert enabled.status_code == 200
+    assert enabled.json()["status"] == "enabled"
+    reloaded = MemoryService(workspace / ".minicode" / "memory")
+    assert reloaded.get_memory(session.run_id).status == "enabled"
+    assert "恢复后的摘要" in reloaded.retrieve("恢复后的摘要", [])
+
+
+def test_web_combined_memory_edit_and_enable_persists_all_fields(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    memory = MemoryService(workspace / ".minicode" / "memory")
+    assert memory.store_rule("old-name", "old content", paths=["old.py"])
+    memory_id = memory.list_memories()[0].id
+    assert client.patch(
+        f"/api/projects/{project['project_id']}/memories/{memory_id}",
+        json={"enabled": False},
+    ).status_code == 200
+
+    response = client.patch(
+        f"/api/projects/{project['project_id']}/memories/{memory_id}",
+        json={
+            "enabled": True,
+            "name": "new-name",
+            "content": "new content",
+            "paths": ["new.py"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "enabled"
+    assert response.json()["name"] == "new-name"
+    assert response.json()["content"] == "new content"
+    assert response.json()["metadata"]["paths"] == "new.py"
+
+
+def test_web_combined_memory_edit_and_disable_persists_all_fields(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    memory = MemoryService(workspace / ".minicode" / "memory")
+    assert memory.store_rule("old-name", "old content", paths=["old.py"])
+    memory_id = memory.list_memories()[0].id
+
+    response = client.patch(
+        f"/api/projects/{project['project_id']}/memories/{memory_id}",
+        json={
+            "enabled": False,
+            "name": "new-name",
+            "content": "new content",
+            "paths": ["new.py"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "disabled"
+    assert response.json()["name"] == "new-name"
+    assert response.json()["content"] == "new content"
+    assert response.json()["metadata"]["paths"] == "new.py"
+    reloaded = MemoryService(workspace / ".minicode" / "memory").get_memory(memory_id)
+    assert reloaded is not None
+    assert reloaded.status == "disabled"
+    assert reloaded.name == "new-name"
+    assert reloaded.content == "new content"
+    assert reloaded.metadata["paths"] == "new.py"

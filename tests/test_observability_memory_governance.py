@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from minicode.memory import MemoryConflictError, MemoryService
 from minicode.observability import AuditStore, EvalCase, EvalRunner, TraceStore
+from minicode.schemas.session import SessionState
 
 
 def test_trace_store_is_append_only_filterable_and_tolerates_partial_tail(tmp_path):
@@ -70,6 +72,26 @@ def test_memory_candidate_dedup_promotion_and_crud(tmp_path):
     assert memory.get_memory(rule_id) is None
 
 
+def test_enable_memory_reenables_markdown_rule_and_candidate(tmp_path):
+    root = tmp_path / "memory"
+    memory = MemoryService(root)
+    assert memory.store_rule("format", "Use ruff.")
+    candidate_id = memory.propose_candidate("docs", "Document API changes.")
+
+    assert candidate_id is not None
+    assert memory.disable_memory("format")
+    assert memory.disable_memory(candidate_id)
+    assert memory.enable_memory("format")
+    assert memory.enable_memory(candidate_id)
+
+    reloaded = MemoryService(root)
+    assert reloaded.get_memory("format").status == "enabled"
+    assert reloaded.get_memory(candidate_id).status == "enabled"
+    assert "Use ruff." in reloaded.retrieve("ruff", [])
+    assert "Document API changes." not in reloaded.retrieve("Document API changes", [])
+    assert candidate_id not in reloaded.keyword_index.search("Document API changes")
+
+
 def test_memory_promotion_requires_explicit_conflict_replacement(tmp_path):
     memory = MemoryService(tmp_path / "memory")
     assert memory.store_rule("formatting", "Use black.")
@@ -88,3 +110,89 @@ def test_memory_promotion_requires_explicit_conflict_replacement(tmp_path):
 def test_memory_candidate_rejects_sensitive_content(tmp_path):
     memory = MemoryService(tmp_path / "memory")
     assert memory.propose_candidate("secret", "TOKEN=top-secret-value") is None
+
+
+def test_run_summary_is_idempotent_and_contains_only_bounded_conclusions(tmp_path):
+    memory = MemoryService(tmp_path / "memory")
+    session = SessionState(
+        run_id="run-summary",
+        task="修复 README 检索",
+        status="completed",
+        final_answer="已完成修复。" + "x" * 2_000,
+        active_files=["README.md"],
+    )
+
+    assert memory.store_run_summary(session)
+    assert memory.store_run_summary(session)
+
+    summaries = [item for item in memory.list_memories() if item.category == "summaries"]
+    assert len(summaries) == 1
+    assert summaries[0].metadata["tier"] == "medium"
+    assert "修复 README 检索" in summaries[0].content
+    assert "README.md" in summaries[0].content
+    assert len(summaries[0].content) < 1_500
+
+
+def test_medium_memory_update_and_disable_survive_reload(tmp_path):
+    root = tmp_path / "memory"
+    memory = MemoryService(root)
+    session = SessionState(
+        run_id="run-summary-edit",
+        task="旧任务",
+        status="completed",
+        final_answer="旧摘要",
+    )
+    assert memory.store_run_summary(session)
+    assert memory.update_memory(session.run_id, name="新任务", content="新摘要")
+    assert memory.disable_memory(session.run_id)
+
+    reloaded = MemoryService(root)
+    record = reloaded.get_memory(session.run_id)
+    assert record is not None
+    assert record.name == "新任务"
+    assert record.content == "新摘要"
+    assert record.status == "disabled"
+    assert reloaded.retrieve("新摘要", []) == ""
+
+
+def test_disabled_summary_stays_disabled_when_stored_again(tmp_path):
+    root = tmp_path / "memory"
+    memory = MemoryService(root)
+    session = SessionState(
+        run_id="run-summary-duplicate",
+        task="归档任务",
+        status="completed",
+        final_answer="归档结论",
+    )
+    assert memory.store_run_summary(session)
+    assert memory.disable_memory(session.run_id)
+    assert memory.store_run_summary(session)
+
+    reloaded = MemoryService(root)
+    assert reloaded.get_memory(session.run_id).status == "disabled"
+    assert reloaded.retrieve("归档结论", []) == ""
+
+
+def test_medium_memory_retention_expires_old_items_caps_count_and_protects_pinned(tmp_path):
+    memory = MemoryService(tmp_path / "memory")
+    now = datetime(2026, 8, 20, tzinfo=UTC)
+    old = SessionState(run_id="old", task="过期任务", status="failed", final_answer="失败")
+    pinned = SessionState(run_id="pinned", task="固定任务", status="completed", final_answer="保留")
+    memory.store_run_summary(old, created_at=now - timedelta(days=31))
+    memory.store_run_summary(pinned, created_at=now - timedelta(days=90), pinned=True)
+    for index in range(202):
+        session = SessionState(
+            run_id=f"recent-{index}",
+            task=f"近期任务 {index}",
+            status="completed",
+            final_answer="完成",
+        )
+        memory.store_run_summary(session, created_at=now - timedelta(minutes=index))
+
+    removed = memory.enforce_retention(now=now, max_items=200, max_age_days=30)
+    summaries = [item for item in memory.list_memories() if item.category == "summaries"]
+
+    assert "old" in removed
+    assert "pinned" not in removed
+    assert memory.get_memory("pinned") is not None
+    assert len([item for item in summaries if item.metadata.get("pinned") != "true"]) == 200

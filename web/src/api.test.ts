@@ -38,4 +38,42 @@ describe("api client", () => {
       body: JSON.stringify({ decision: "approve" }),
     }));
   });
+
+  it("读取模型能力并在创建会话时提交选择的模型", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        default_model: "deepseek-v4-flash",
+        models: [{ id: "deepseek-v4-flash", label: "Flash" }, { id: "deepseek-v4-pro", label: "Pro" }],
+        token_limits: { input: 48_000, output: 8_000, user_message: 12_000 },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session_id: "session-1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    vi.stubGlobal("fetch", fetch);
+
+    await api.capabilities();
+    await api.createSession("project-1", "检查项目", "ask", "deepseek-v4-pro");
+
+    expect(fetch).toHaveBeenNthCalledWith(1, "/api/capabilities", expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(2, "/api/projects/project-1/sessions", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ input: "检查项目", mode: "ask", model_id: "deepseek-v4-pro" }),
+    }));
+  });
+
+  it("更新会话的下一次默认模型", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      session_id: "session-1",
+      model_id: "deepseek-v4-pro",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetch);
+
+    await api.selectModel("session-1", "deepseek-v4-pro");
+
+    expect(fetch).toHaveBeenCalledWith("/api/sessions/session-1/model", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ model_id: "deepseek-v4-pro" }),
+    }));
+  });
 });

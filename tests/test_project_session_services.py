@@ -73,6 +73,34 @@ def test_start_run_uses_a_new_run_id_and_keeps_sessions_isolated(tmp_path: Path)
     assert [message.content for message in untouched.messages] == ["Second conversation"]
 
 
+def test_session_default_model_is_pinned_when_run_starts(tmp_path: Path):
+    store = GlobalStore(tmp_path / "minicode.db")
+    projects = ProjectService(store)
+    sessions = SessionService(store)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    project = projects.open_workspace(workspace)
+
+    session = sessions.create(project, "检查项目", model_id="deepseek-v4-pro")
+    started = sessions.start_run(session.session_id, "继续检查")
+
+    assert started.model_id == "deepseek-v4-pro"
+    assert started.run_model_id == "deepseek-v4-pro"
+
+
+def test_session_model_defaults_to_flash(tmp_path: Path):
+    store = GlobalStore(tmp_path / "minicode.db")
+    projects = ProjectService(store)
+    sessions = SessionService(store)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    project = projects.open_workspace(workspace)
+
+    session = sessions.create(project, "检查项目")
+
+    assert session.model_id == "deepseek-v4-flash"
+
+
 def test_deleting_session_only_removes_that_conversation(tmp_path: Path):
     store = GlobalStore(tmp_path / "minicode.db")
     projects = ProjectService(store)
