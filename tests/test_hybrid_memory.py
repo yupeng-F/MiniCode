@@ -156,9 +156,10 @@ class FakeEmbeddingRouter:
 
 
 class FakeVectorStore:
-    def __init__(self):
+    def __init__(self, *, hits=None):
         self.upserts = []
         self.query_calls = []
+        self.hits = hits or [VectorHit("semantic", 0.05), VectorHit("keyword", 0.2)]
 
     def content_hashes(self, identity, project_id):
         return {}
@@ -168,7 +169,7 @@ class FakeVectorStore:
 
     def query(self, identity, project_id, vector, limit=30):
         self.query_calls.append((identity, project_id, vector, limit))
-        return [VectorHit("semantic", 0.05), VectorHit("keyword", 0.2)]
+        return self.hits
 
 
 def test_memory_service_returns_observable_hybrid_result(tmp_path):
@@ -207,6 +208,40 @@ def test_lazy_remote_index_skips_sensitive_markdown(tmp_path):
 
     assert remote.document_calls == [["普通规则"]]
     assert result.provider == "aliyun"
+
+
+def test_sensitive_migrated_markdown_is_excluded_from_fts_index(tmp_path):
+    memory_root = tmp_path / ".minicode" / "memory"
+    rules = memory_root / "rules"
+    rules.mkdir(parents=True)
+    (rules / "legacy-sensitive.md").write_text(
+        "---\nname: legacy-sensitive\nstatus: enabled\n---\n\nDASHSCOPE_API_KEY=secret\n",
+        encoding="utf-8",
+    )
+
+    memory = MemoryService(memory_root)
+
+    assert memory.keyword_index.search("DASHSCOPE_API_KEY") == []
+
+
+def test_historical_sensitive_vector_hit_is_excluded_from_retrieval(tmp_path):
+    memory_root = tmp_path / ".minicode" / "memory"
+    rules = memory_root / "rules"
+    rules.mkdir(parents=True)
+    (rules / "legacy-sensitive.md").write_text(
+        "---\nname: legacy-sensitive\nstatus: enabled\n---\n\nDASHSCOPE_API_KEY=secret\n",
+        encoding="utf-8",
+    )
+    (rules / "ordinary.md").write_text(
+        "---\nname: ordinary\nstatus: enabled\n---\n\n普通规则\n",
+        encoding="utf-8",
+    )
+    vectors = FakeVectorStore(hits=[VectorHit("legacy-sensitive", 0.05), VectorHit("ordinary", 0.2)])
+    memory = MemoryService(memory_root, embedding_router=FakeEmbeddingRouter(), vector_store=vectors)
+
+    result = memory.retrieve_result("普通查询", [])
+
+    assert [item.memory_id for item in result.items] == ["ordinary"]
 
 
 def test_memory_service_reports_complete_retrieval_elapsed_time(tmp_path, monkeypatch):

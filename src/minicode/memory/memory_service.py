@@ -276,6 +276,7 @@ class MemoryService:
             )
             for item in self.list_memories("enabled")
             if item.category in {"rules", "summaries"}
+            and not self.filter.contains_sensitive(item.content)
         ]
         self.keyword_index.rebuild(records)
 
@@ -314,6 +315,7 @@ class MemoryService:
             for item in self.list_memories("enabled")
             if item.category in {"rules", "summaries"}
             and _matches_paths(item.metadata.get("paths", ""), active_files)
+            and not self.filter.contains_sensitive(item.content)
         }
         keyword_ids = [
             memory_id
