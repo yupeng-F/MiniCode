@@ -316,9 +316,9 @@ async def list_project_memories(project_id: str) -> JSONResponse:
 @app.patch("/api/projects/{project_id}/memories/{memory_id}")
 async def update_project_memory(project_id: str, memory_id: str, req: MemoryUpdateRequest) -> JSONResponse:
     memory = _project_memory(project_id)
-    if req.enabled is False:
-        changed = memory.disable_memory(memory_id)
-    elif req.enabled is True:
+    if req.enabled is None:
+        changed = memory.update_memory(memory_id, content=req.content, name=req.name, paths=req.paths)
+    else:
         has_edits = any(value is not None for value in (req.content, req.name, req.paths))
         changed = memory.update_memory(
             memory_id,
@@ -327,9 +327,7 @@ async def update_project_memory(project_id: str, memory_id: str, req: MemoryUpda
             paths=req.paths,
         ) if has_edits else True
         if changed:
-            changed = memory.enable_memory(memory_id)
-    else:
-        changed = memory.update_memory(memory_id, content=req.content, name=req.name, paths=req.paths)
+            changed = memory.enable_memory(memory_id) if req.enabled else memory.disable_memory(memory_id)
     if not changed:
         raise HTTPException(status_code=404, detail="Memory not found or update rejected")
     item = memory.get_memory(memory_id)

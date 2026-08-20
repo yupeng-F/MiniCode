@@ -336,3 +336,36 @@ def test_web_combined_memory_edit_and_enable_persists_all_fields(tmp_path: Path)
     assert response.json()["name"] == "new-name"
     assert response.json()["content"] == "new content"
     assert response.json()["metadata"]["paths"] == "new.py"
+
+
+def test_web_combined_memory_edit_and_disable_persists_all_fields(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app.state.global_store_path = tmp_path / "home" / "minicode.db"
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"workspace": str(workspace)}).json()
+    memory = MemoryService(workspace / ".minicode" / "memory")
+    assert memory.store_rule("old-name", "old content", paths=["old.py"])
+    memory_id = memory.list_memories()[0].id
+
+    response = client.patch(
+        f"/api/projects/{project['project_id']}/memories/{memory_id}",
+        json={
+            "enabled": False,
+            "name": "new-name",
+            "content": "new content",
+            "paths": ["new.py"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "disabled"
+    assert response.json()["name"] == "new-name"
+    assert response.json()["content"] == "new content"
+    assert response.json()["metadata"]["paths"] == "new.py"
+    reloaded = MemoryService(workspace / ".minicode" / "memory").get_memory(memory_id)
+    assert reloaded is not None
+    assert reloaded.status == "disabled"
+    assert reloaded.name == "new-name"
+    assert reloaded.content == "new content"
+    assert reloaded.metadata["paths"] == "new.py"
