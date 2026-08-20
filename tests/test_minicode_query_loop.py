@@ -36,6 +36,17 @@ def test_run_service_persists_session(tmp_path: Path):
     assert loaded.final_answer == "Done."
 
 
+def test_query_loop_records_context_budget_usage_on_session(tmp_path: Path):
+    model = JsonScriptModel([{"type": "final", "content": "已完成。"}])
+    service = RunService(workspace=str(tmp_path), model=model)
+
+    session = service.run("检查上下文预算", mode="ask")
+
+    assert session.context_usage["current_task"] > 0
+    assert session.context_usage["total"] <= 48_000
+    assert session.context_dropped == []
+
+
 def test_query_loop_recovers_from_a_repeated_read_only_tool_call(tmp_path: Path):
     model = JsonScriptModel([
         {"type": "tool_use", "tool_call": {"tool_name": "list_directory", "arguments": {"path": "."}}},

@@ -30,6 +30,7 @@ class ToolCall(ModelMixin):
     tool_name: str
     call_id: str = field(default_factory=lambda: str(uuid4())[:8])
     arguments: dict[str, Any] = field(default_factory=dict)
+    reasoning_content: str = ""
     intent: str = ""
     role: str = "assistant"
     mode: str = "act"

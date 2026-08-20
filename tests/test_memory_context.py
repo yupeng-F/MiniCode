@@ -1,9 +1,44 @@
 from __future__ import annotations
 
+import pytest
+
 from minicode.context.context_manager import ContextManager
+from minicode.context.token_budget import UserMessageTooLarge
 from minicode.memory.memory_service import MemoryService
 from minicode.schemas.session import Message, SessionState
 from minicode.schemas.tool import ToolCall, ToolCallRecord, ToolResult
+
+
+def test_context_projection_reports_partition_usage_without_repeating_current_task():
+    session = SessionState(task="当前项目的 README 说明项目的目标是什么")
+    session.messages = [
+        Message(role="assistant", content="上一轮回答"),
+        Message(role="user", content=session.task),
+    ]
+
+    projection = ContextManager().build(session, tool_descriptions=["- read_file: 读取文件"])
+
+    assert projection.current_task == session.task
+    assert session.task not in projection.recent_messages
+    assert "上一轮回答" in projection.recent_messages
+    assert projection.usage["current_task"] > 0
+    assert projection.usage["system_and_tools"] > 0
+    assert projection.total_tokens <= 48_000
+    assert session.task in projection.render()
+
+
+def test_context_projection_rejects_oversized_current_task_before_model_call():
+    session = SessionState(task="x")
+    manager = ContextManager()
+
+    class OversizedCounter:
+        def count(self, value: object) -> int:
+            return 12_001
+
+    manager.token_counter = OversizedCounter()
+
+    with pytest.raises(UserMessageTooLarge):
+        manager.build(session)
 
 
 def test_context_compacts_old_messages_and_redacts_sensitive_values(tmp_path):
@@ -57,6 +92,19 @@ def test_memory_captures_verified_test_command(tmp_path):
     memory.capture_verified_test_command("conda run -n LLM python -m pytest -q")
 
     assert "conda run -n LLM python -m pytest -q" in memory.retrieve("Run tests", [])
+
+
+def test_user_instruction_is_reviewable_candidate_until_promoted(tmp_path):
+    memory = MemoryService(tmp_path / ".minicode" / "memory")
+
+    captured = memory.capture_user_instruction("必须只修改 eval/results/browser_e2e_probe.md")
+
+    assert captured is True
+    records = memory.list_memories()
+    assert len(records) == 1
+    assert records[0].status == "candidate"
+    assert records[0].metadata["source"] == "user_instruction"
+    assert memory.retrieve("Read README", []) == ""
 
 
 def test_context_keeps_recent_read_content_and_pagination_metadata():

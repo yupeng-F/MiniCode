@@ -30,6 +30,8 @@ class SessionState(ModelMixin):
     plan: list[str] = field(default_factory=list)
     memory_refs: list[str] = field(default_factory=list)
     compact_summary: str = ""
+    context_usage: dict[str, int] = field(default_factory=dict)
+    context_dropped: list[str] = field(default_factory=list)
     final_answer: str = ""
     pending_tool_call: ToolCall | None = None
     pending_approval_reason: str = ""

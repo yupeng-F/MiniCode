@@ -52,13 +52,15 @@ class QueryLoop:
         for _ in range(self.max_steps):
             visible = self.runtime.registry.visible_tools(session.mode, self.role)
             use_native_history = self.model.supports_native_tool_history
-            context = self.context_manager.build(
+            projection = self.context_manager.build(
                 session,
                 describe_tools(visible),
                 include_tool_results=not use_native_history,
             )
+            session.context_usage = {**projection.usage, "total": projection.total_tokens}
+            session.context_dropped = list(projection.dropped)
             response = self.model.complete(
-                context,
+                projection.render(),
                 tool_specs_for_model(visible),
                 tool_history=session.tool_calls if use_native_history else None,
             )

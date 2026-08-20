@@ -172,11 +172,11 @@ class MemoryService:
         if not any(marker in content.lower() for marker in markers):
             return False
         suffix = hashlib.sha256(content.encode("utf-8")).hexdigest()[:10]
-        return self.store_rule(
+        return self.propose_candidate(
             name=f"user-instruction-{suffix}",
             content=content,
             source="user_instruction",
-        )
+        ) is not None
 
 
 def _parse_memory_file(text: str) -> tuple[dict[str, str], str]:

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from minicode.context.token_budget import Counter, TokenBudget
+from minicode.context.token_counter import TokenCounter
 from minicode.engine.model_client import ModelClient, ModelResponse
 from minicode.memory.sensitive_data_filter import SensitiveDataFilter
 from minicode.schemas.tool import ToolCall, ToolCallRecord
@@ -44,9 +46,13 @@ class DeepSeekModelClient(ModelClient):
         model: str = "deepseek-v4-flash",
         base_url: str = "https://api.deepseek.com",
         client: Any | None = None,
+        token_counter: Counter | None = None,
+        token_budget: TokenBudget | None = None,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
+        self.token_counter = token_counter or TokenCounter()
+        self.token_budget = token_budget or TokenBudget()
         if client is None:
             from openai import OpenAI
 
@@ -60,11 +66,14 @@ class DeepSeekModelClient(ModelClient):
         tools: list[dict],
         tool_history: list[ToolCallRecord] | None = None,
     ) -> ModelResponse:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=self._build_messages(context, tool_history or []),
-            tools=build_openai_tools(tools),
-        )
+        request = {
+            "model": self.model,
+            "messages": self._build_messages(context, tool_history or []),
+            "tools": build_openai_tools(tools),
+            "max_tokens": self.token_budget.max_output_tokens,
+        }
+        self.token_budget.validate_input(request, counter=self.token_counter)
+        response = self.client.chat.completions.create(**request)
         return self._to_model_response(response)
 
     def _build_messages(self, context: str, tool_history: list[ToolCallRecord]) -> list[dict[str, Any]]:
@@ -101,7 +110,7 @@ class DeepSeekModelClient(ModelClient):
                 },
                 ensure_ascii=False,
             )
-            messages.append({
+            assistant_message: dict[str, Any] = {
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [{
@@ -112,7 +121,10 @@ class DeepSeekModelClient(ModelClient):
                         "arguments": json.dumps(record.request.arguments, ensure_ascii=False),
                     },
                 }],
-            })
+            }
+            if record.request.reasoning_content:
+                assistant_message["reasoning_content"] = record.request.reasoning_content
+            messages.append(assistant_message)
             messages.append({"role": "tool", "tool_call_id": record.call_id, "content": content})
         return messages
 
@@ -137,6 +149,7 @@ class DeepSeekModelClient(ModelClient):
                     call_id=str(call.id),
                     tool_name=str(call.function.name),
                     arguments=arguments,
+                    reasoning_content=str(getattr(message, "reasoning_content", "") or ""),
                 ),
             )
         return ModelResponse(type="final", content=str(getattr(message, "content", "") or ""))
